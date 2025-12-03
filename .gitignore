@@ -1,0 +1,79 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+*.sln.iml
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Test results
+TestResults/
+*.trx
+coverage/
+
+# NuGet
+*.nupkg
+packages/
+!.nuget/packages
+
+# Build
+*.log
+msbuild.binlog
+
+# User-specific files
+*.rsuser
+*.crunchsession
+*.dbmdl
+*.jfm
+*.pfx
+*.publishsettings
+
+# Windows Store app package
+*.appx
+*.appxbundle
+*.appxupload
+
+# MSIX packaging
+*.msix
+*.msixbundle
+*.msixupload
+
+# Publish output
+publish/
+
+# Local settings
+appsettings.local.json
+appsettings.Development.json
+
+# Secrets
+secrets.json
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal

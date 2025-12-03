@@ -1,0 +1,26 @@
+display_name: Site Default
+catalogs:
+  - production
+
+managed_installs:
+  - firefox
+
+included_manifests:
+  - common_apps
+
+conditional_items:
+  - condition: "hostname contains 'ENG-'"
+    managed_installs:
+      - vscode
+      - git
+  
+  - fact: department
+    operator: "=="
+    value: "IT"
+    managed_installs:
+      - remote-desktop-manager
+
+notes: |
+  Default manifest applied to all machines.
+  Engineering machines get additional development tools.
+  IT department gets remote management tools.

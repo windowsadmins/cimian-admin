@@ -1,0 +1,42 @@
+name: firefox
+display_name: Mozilla Firefox
+version: "120.0"
+description: A free and open-source web browser developed by Mozilla Foundation
+developer: Mozilla
+category: Browsers
+
+catalogs:
+  - testing
+  - production
+
+installer:
+  type: exe
+  location: pkgs/Mozilla/Firefox-120.0.exe
+  arguments:
+    - "/S"
+  hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  hash_algorithm: sha256
+
+uninstaller:
+  type: exe
+  location: "%ProgramFiles%\\Mozilla Firefox\\uninstall\\helper.exe"
+  arguments:
+    - "/S"
+
+unattended_install: true
+unattended_uninstall: true
+
+installs:
+  - type: file
+    path: "%ProgramFiles%\\Mozilla Firefox\\firefox.exe"
+    version: "120.0"
+    version_comparison: ">="
+
+supported_architectures:
+  - x64
+  - x86
+
+minimum_os_version: "10.0.17763"
+
+blocking_applications:
+  - firefox.exe

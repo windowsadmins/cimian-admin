@@ -1,0 +1,149 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: preview
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~\.nuget\packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Build.props', '**/Directory.Packages.props') }}
+
+      - name: Derive version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v',''
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish WinUI 3 app per arch
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          foreach ($arch in @("x64", "arm64")) {
+            $rid = "win-$arch"
+            dotnet publish src/CimianAdmin/CimianAdmin.csproj `
+              -c Release -r $rid `
+              -p:Platform=$($arch.ToUpper()) `
+              -p:Version=$version `
+              -p:WindowsAppSDKSelfContained=true `
+              -p:SelfContained=true `
+              -o "publish/$arch"
+          }
+
+      - name: Download cimipkg
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Path tools -Force | Out-Null
+          $downloaded = $false
+          try {
+            gh release download --repo windowsadmins/cimian-pkg --pattern "cimipkg-win-x64.zip" --dir tools 2>$null
+            if (Test-Path tools/cimipkg-win-x64.zip) {
+              Expand-Archive -Path tools/cimipkg-win-x64.zip -DestinationPath tools -Force
+              if (Test-Path tools/cimipkg.exe) { $downloaded = $true }
+            }
+          } catch {}
+          if (-not $downloaded) {
+            gh release download --repo windowsadmins/cimian-pkg --pattern "cimipkg.exe" --dir tools
+          }
+          if (-not (Test-Path tools/cimipkg.exe)) { throw "cimipkg download failed" }
+
+      - name: Build MSI + nupkg packages
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+
+          foreach ($arch in @("x64", "arm64")) {
+            $stagingDir = "staging-$arch"
+            New-Item -ItemType Directory -Path "$stagingDir/payload" -Force | Out-Null
+            New-Item -ItemType Directory -Path "$stagingDir/scripts" -Force | Out-Null
+
+            # WinUI 3 publish output is a directory of files - copy entire contents
+            Copy-Item "publish/$arch/*" "$stagingDir/payload/" -Recurse -Force
+
+            (Get-Content "build-info.yaml" -Raw) `
+              -replace '\$\{TIMESTAMP\}', $version `
+              -replace '\$\{ARCH\}', $arch |
+              Set-Content "$stagingDir/build-info.yaml" -Encoding UTF8
+
+            Copy-Item "scripts/postinstall.ps1" "$stagingDir/scripts/postinstall.ps1" -Force
+
+            & .\tools\cimipkg.exe --verbose $stagingDir
+            if ($LASTEXITCODE -ne 0) { throw "cimipkg MSI build failed for $arch" }
+
+            $msi = Get-ChildItem "$stagingDir/build/*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($msi) { Move-Item $msi.FullName "release/CimianAdmin-$arch-$version.msi" -Force }
+
+            & .\tools\cimipkg.exe --nupkg --verbose $stagingDir
+            $nupkg = Get-ChildItem "$stagingDir/build/*.nupkg" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($nupkg) { Move-Item $nupkg.FullName "release/CimianAdmin-$arch-$version.nupkg" -Force }
+          }
+
+      - name: Prepare release zips
+        shell: pwsh
+        run: |
+          foreach ($arch in @("x64", "arm64")) {
+            Compress-Archive -Path "publish/$arch/*" -DestinationPath "release/CimianAdmin-$arch.zip" -Force
+          }
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = "${{ steps.version.outputs.version }}"
+          $dotnet = (dotnet --version).Trim()
+          $os = (Get-CimInstance Win32_OperatingSystem).Caption.Trim()
+          $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $title = "CimianAdmin $version"
+
+          $buildInfo = @"
+          ## Build info
+
+          Built with .NET SDK $dotnet on $os, via GitHub Actions: $runUrl. Provided **unsigned**.
+          "@
+
+          $signing = @"
+          ## Signing for enterprise deployment
+
+          ``````powershell
+          signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /n "Your Certificate Name" CimianAdmin.exe
+          signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /n "Your Certificate Name" CimianAdmin-x64-$version.msi
+          ``````
+
+          Built from commit ``$env:GITHUB_SHA``.
+          "@
+
+          $autoNotes = gh api -X POST "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" -f tag_name=$tag --jq .body
+          $notes = "$buildInfo`n`n$autoNotes`n`n$signing"
+
+          $artifacts = Get-ChildItem -Path release -File | ForEach-Object { $_.FullName }
+          if ($artifacts.Count -eq 0) { throw 'No artifacts to upload' }
+          gh release create $tag @artifacts --title $title --notes $notes

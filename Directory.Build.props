@@ -8,6 +8,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-all</AnalysisLevel>
+    <!-- CA1716: namespace name conflicts with reserved keyword (Shared) -->
+    <!-- CA1034: nested public types in Constants.cs (intentional grouping) -->
+    <NoWarn>$(NoWarn);CA1716;CA1034</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>

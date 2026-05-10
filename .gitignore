@@ -34,6 +34,7 @@ coverage/
 *.nupkg
 packages/
 !.nuget/packages
+!src/**/Models/Packages/
 
 # Build
 *.log

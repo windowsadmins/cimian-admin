@@ -88,9 +88,12 @@ jobs:
             # WinUI 3 publish output is a directory of files - copy entire contents
             Copy-Item "publish/$arch/*" "$stagingDir/payload/" -Recurse -Force
 
+            # Strip signing_certificate so cimipkg doesn't try to sign on the
+            # runner — releases are published unsigned by design.
             (Get-Content "build-info.yaml" -Raw) `
               -replace '\$\{TIMESTAMP\}', $version `
-              -replace '\$\{ARCH\}', $arch |
+              -replace '\$\{ARCH\}', $arch `
+              -replace '(?m)^\s*signing_certificate:.*\r?\n', '' |
               Set-Content "$stagingDir/build-info.yaml" -Encoding UTF8
 
             Copy-Item "scripts/postinstall.ps1" "$stagingDir/scripts/postinstall.ps1" -Force

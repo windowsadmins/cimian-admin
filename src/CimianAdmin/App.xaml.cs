@@ -38,6 +38,7 @@ public partial class App : Application
                 services.AddSingleton<IPackageService, PackageService>();
                 services.AddSingleton<IManifestService, ManifestService>();
                 services.AddSingleton<ICatalogService, CatalogService>();
+                services.AddSingleton<IGitService, GitService>();
 
                 services.AddSingleton<MainViewModel>();
                 services.AddTransient<PackagesViewModel>();

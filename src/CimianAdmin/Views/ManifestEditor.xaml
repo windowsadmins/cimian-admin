@@ -35,6 +35,16 @@
                                TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock x:Name="DiskChangedIndicator"
+                               Text="Modified on disk"
+                               Visibility="Collapsed"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                               VerticalAlignment="Center">
+                        <ToolTipService.ToolTip>
+                            <TextBlock Text="This file differs from HEAD in the git working tree." />
+                        </ToolTipService.ToolTip>
+                    </TextBlock>
                     <TextBlock x:Name="DirtyIndicator"
                                Text="Modified"
                                Visibility="Collapsed"

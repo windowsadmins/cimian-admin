@@ -11,6 +11,8 @@ public sealed partial class PackageEditor : UserControl
 {
     private readonly IPackageService _packageService;
     private readonly ICatalogService _catalogService;
+    private readonly IGitService _gitService;
+    private readonly IRepositoryService _repositoryService;
     private Package? _package;
     private bool _suppressDirty;
     private IReadOnlyList<string> _knownCatalogs = [];
@@ -21,16 +23,28 @@ public sealed partial class PackageEditor : UserControl
         ["file", "msi", "msix", "registry", "exe", "ps1"];
 
     public PackageEditor()
-        : this(App.Resolve<IPackageService>(), App.Resolve<ICatalogService>())
+        : this(
+            App.Resolve<IPackageService>(),
+            App.Resolve<ICatalogService>(),
+            App.Resolve<IGitService>(),
+            App.Resolve<IRepositoryService>())
     {
     }
 
-    public PackageEditor(IPackageService packageService, ICatalogService catalogService)
+    public PackageEditor(
+        IPackageService packageService,
+        ICatalogService catalogService,
+        IGitService gitService,
+        IRepositoryService repositoryService)
     {
         ArgumentNullException.ThrowIfNull(packageService);
         ArgumentNullException.ThrowIfNull(catalogService);
+        ArgumentNullException.ThrowIfNull(gitService);
+        ArgumentNullException.ThrowIfNull(repositoryService);
         _packageService = packageService;
         _catalogService = catalogService;
+        _gitService = gitService;
+        _repositoryService = repositoryService;
         InitializeComponent();
     }
 
@@ -94,6 +108,26 @@ public sealed partial class PackageEditor : UserControl
         Populate(package);
         IsDirty = false;
         StatusBar.IsOpen = false;
+        await RefreshDiskChangedAsync(package).ConfigureAwait(true);
+    }
+
+    private async Task RefreshDiskChangedAsync(Package package)
+    {
+        DiskChangedIndicator.Visibility = Visibility.Collapsed;
+        if (string.IsNullOrEmpty(package.FilePath)) return;
+        var repo = _repositoryService.CurrentRepository;
+        if (repo is null) return;
+        try
+        {
+            var info = await _gitService.DiscoverAsync(repo.RootPath).ConfigureAwait(true);
+            if (info is null) return;
+            var modified = await _gitService.IsFileModifiedAsync(info, package.FilePath).ConfigureAwait(true);
+            DiskChangedIndicator.Visibility = modified ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch
+        {
+            DiskChangedIndicator.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void Populate(Package package)

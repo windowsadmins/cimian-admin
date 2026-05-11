@@ -1,6 +1,7 @@
 namespace CimianAdmin.Views;
 
 using System.Globalization;
+using CimianAdmin.Core.Models.Git;
 using CimianAdmin.Core.Models.Manifests;
 using CimianAdmin.Core.Models.Packages;
 using CimianAdmin.Core.Models.Repository;
@@ -13,22 +14,32 @@ using Microsoft.UI.Xaml.Media;
 public sealed partial class RepositoryPage : Page
 {
     private const int RecentLimit = 10;
+    private const int GitStatusDisplayLimit = 50;
 
     private readonly IRepositoryService _repositoryService;
     private readonly IPackageService _packageService;
     private readonly IManifestService _manifestService;
+    private readonly IGitService _gitService;
 
     private List<Package> _recentPackages = [];
     private List<Manifest> _recentManifests = [];
+    private GitRepositoryInfo? _gitInfo;
+    private List<GitStatusEntry> _gitEntries = [];
 
-    public RepositoryPage(IRepositoryService repositoryService, IPackageService packageService, IManifestService manifestService)
+    public RepositoryPage(
+        IRepositoryService repositoryService,
+        IPackageService packageService,
+        IManifestService manifestService,
+        IGitService gitService)
     {
         ArgumentNullException.ThrowIfNull(repositoryService);
         ArgumentNullException.ThrowIfNull(packageService);
         ArgumentNullException.ThrowIfNull(manifestService);
+        ArgumentNullException.ThrowIfNull(gitService);
         _repositoryService = repositoryService;
         _packageService = packageService;
         _manifestService = manifestService;
+        _gitService = gitService;
         InitializeComponent();
         Loaded += OnLoaded;
     }
@@ -47,6 +58,123 @@ public sealed partial class RepositoryPage : Page
         RepoPathText.Text = repo.RootPath;
         BuildStatCards(repo);
         await LoadRecentsAsync().ConfigureAwait(true);
+        await LoadGitStatusAsync(repo).ConfigureAwait(true);
+    }
+
+    private async Task LoadGitStatusAsync(CimianRepository repo)
+    {
+        try
+        {
+            _gitInfo = await _gitService.DiscoverAsync(repo.RootPath).ConfigureAwait(true);
+        }
+        catch
+        {
+            _gitInfo = null;
+        }
+
+        if (_gitInfo is null)
+        {
+            GitStatusCard.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        GitStatusCard.Visibility = Visibility.Visible;
+        GitStatusTitle.Text = string.IsNullOrEmpty(_gitInfo.Branch)
+            ? "Git status"
+            : string.Create(CultureInfo.InvariantCulture, $"Git status · {_gitInfo.Branch}");
+
+        var rootName = System.IO.Path.GetFileName(
+            _gitInfo.GitRoot.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
+        GitStatusScope.Text = string.IsNullOrEmpty(_gitInfo.RelativeRepoPath)
+            ? $"Scoped to {rootName}"
+            : $"Scoped to {_gitInfo.RelativeRepoPath} (in {rootName})";
+
+        try
+        {
+            var entries = await _gitService.GetStatusAsync(_gitInfo).ConfigureAwait(true);
+            _gitEntries = [.. entries];
+        }
+        catch
+        {
+            _gitEntries = [];
+        }
+
+        RenderGitStatus();
+    }
+
+    private void RenderGitStatus()
+    {
+        if (_gitEntries.Count == 0)
+        {
+            GitStatusEmpty.Visibility = Visibility.Visible;
+            GitStatusList.Visibility = Visibility.Collapsed;
+            GitStatusList.ItemsSource = null;
+            return;
+        }
+
+        GitStatusEmpty.Visibility = Visibility.Collapsed;
+        GitStatusList.Visibility = Visibility.Visible;
+
+        var rows = _gitEntries
+            .Take(GitStatusDisplayLimit)
+            .Select(static e => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{StatusLetter(e.Status)}  {e.RelativePath}"))
+            .ToList();
+        if (_gitEntries.Count > GitStatusDisplayLimit)
+        {
+            rows.Add(string.Create(CultureInfo.InvariantCulture,
+                $"… and {_gitEntries.Count - GitStatusDisplayLimit} more"));
+        }
+        GitStatusList.ItemsSource = rows;
+    }
+
+    private static string StatusLetter(GitFileStatus status) => status switch
+    {
+        GitFileStatus.Modified => "M ",
+        GitFileStatus.Added => "A ",
+        GitFileStatus.Deleted => "D ",
+        GitFileStatus.Renamed => "R ",
+        GitFileStatus.Untracked => "??",
+        GitFileStatus.Conflicted => "U ",
+        _ => "  ",
+    };
+
+    private async void OnGitRefreshClicked(object sender, RoutedEventArgs e)
+    {
+        var repo = _repositoryService.CurrentRepository;
+        if (repo is null) return;
+        await LoadGitStatusAsync(repo).ConfigureAwait(true);
+    }
+
+    private void OnGitStatusItemClicked(object sender, ItemClickEventArgs e)
+    {
+        var view = sender as ListView;
+        var index = view?.Items.IndexOf(e.ClickedItem) ?? -1;
+        if (index < 0 || index >= _gitEntries.Count)
+        {
+            return;
+        }
+
+        var entry = _gitEntries[index];
+        if (App.MainWindowInstance is not { } window) return;
+
+        // Map a changed file back to its editor when possible. Heuristic: if it lives
+        // under pkgsinfo/, jump to Packages; under manifests/, jump to Manifests;
+        // otherwise no-op (user can still see it in the list).
+        var rel = entry.RelativePath.Replace('\\', '/');
+        if (rel.Contains("/pkgsinfo/", StringComparison.OrdinalIgnoreCase))
+        {
+            window.NavigateTo("packages");
+        }
+        else if (rel.Contains("/manifests/", StringComparison.OrdinalIgnoreCase))
+        {
+            window.NavigateTo("manifests");
+        }
+        else if (rel.Contains("/catalogs/", StringComparison.OrdinalIgnoreCase))
+        {
+            window.NavigateTo("catalogs");
+        }
     }
 
     private async Task LoadRecentsAsync()

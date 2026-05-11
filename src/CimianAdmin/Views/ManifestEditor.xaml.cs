@@ -13,6 +13,8 @@ public sealed partial class ManifestEditor : UserControl
     private readonly IManifestService _manifestService;
     private readonly ICatalogService _catalogService;
     private readonly IPackageService _packageService;
+    private readonly IGitService _gitService;
+    private readonly IRepositoryService _repositoryService;
     private Manifest? _manifest;
     private bool _suppressDirty;
     private IReadOnlyList<string> _knownCatalogs = [];
@@ -20,18 +22,32 @@ public sealed partial class ManifestEditor : UserControl
     private IReadOnlyList<string> _knownManifestNames = [];
 
     public ManifestEditor()
-        : this(App.Resolve<IManifestService>(), App.Resolve<ICatalogService>(), App.Resolve<IPackageService>())
+        : this(
+            App.Resolve<IManifestService>(),
+            App.Resolve<ICatalogService>(),
+            App.Resolve<IPackageService>(),
+            App.Resolve<IGitService>(),
+            App.Resolve<IRepositoryService>())
     {
     }
 
-    public ManifestEditor(IManifestService manifestService, ICatalogService catalogService, IPackageService packageService)
+    public ManifestEditor(
+        IManifestService manifestService,
+        ICatalogService catalogService,
+        IPackageService packageService,
+        IGitService gitService,
+        IRepositoryService repositoryService)
     {
         ArgumentNullException.ThrowIfNull(manifestService);
         ArgumentNullException.ThrowIfNull(catalogService);
         ArgumentNullException.ThrowIfNull(packageService);
+        ArgumentNullException.ThrowIfNull(gitService);
+        ArgumentNullException.ThrowIfNull(repositoryService);
         _manifestService = manifestService;
         _catalogService = catalogService;
         _packageService = packageService;
+        _gitService = gitService;
+        _repositoryService = repositoryService;
         InitializeComponent();
     }
 
@@ -109,6 +125,26 @@ public sealed partial class ManifestEditor : UserControl
         Populate(manifest);
         IsDirty = false;
         StatusBar.IsOpen = false;
+        await RefreshDiskChangedAsync(manifest).ConfigureAwait(true);
+    }
+
+    private async Task RefreshDiskChangedAsync(Manifest manifest)
+    {
+        DiskChangedIndicator.Visibility = Visibility.Collapsed;
+        if (string.IsNullOrEmpty(manifest.FilePath)) return;
+        var repo = _repositoryService.CurrentRepository;
+        if (repo is null) return;
+        try
+        {
+            var info = await _gitService.DiscoverAsync(repo.RootPath).ConfigureAwait(true);
+            if (info is null) return;
+            var modified = await _gitService.IsFileModifiedAsync(info, manifest.FilePath).ConfigureAwait(true);
+            DiskChangedIndicator.Visibility = modified ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch
+        {
+            DiskChangedIndicator.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void Populate(Manifest manifest)

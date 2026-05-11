@@ -62,14 +62,44 @@
                        Text="CimianAdmin"
                        Style="{StaticResource CaptionTextBlockStyle}"
                        VerticalAlignment="Center" />
-            <TextBlock x:Name="RepoTitleText"
-                       Grid.Column="5"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"
-                       Margin="0,0,140,0"
-                       TextTrimming="CharacterEllipsis"
-                       MaxWidth="500" />
+            <StackPanel Grid.Column="5"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center"
+                        Margin="0,0,140,0">
+                <TextBlock x:Name="RepoTitleText"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="360" />
+                <Border x:Name="GitIndicator"
+                        Visibility="Collapsed"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="8,2,8,2"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xF1D3;"
+                                  FontSize="11"
+                                  Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                  VerticalAlignment="Center" />
+                        <TextBlock x:Name="GitBranchText"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="GitAheadBehindText"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ToolTipService.ToolTip>
+                        <TextBlock x:Name="GitIndicatorTooltip" />
+                    </ToolTipService.ToolTip>
+                </Border>
+            </StackPanel>
         </Grid>
 
         <muxc:NavigationView

@@ -19,6 +19,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Spacing="4">
@@ -95,19 +96,58 @@
                 </Border>
             </Grid>
 
+            <Border Grid.Row="3"
+                    x:Name="GitStatusCard"
+                    Visibility="Collapsed"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,16,20,12">
+                <StackPanel Spacing="8">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock x:Name="GitStatusTitle"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Name="GitStatusScope"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        <HyperlinkButton Grid.Column="1"
+                                         x:Name="GitRefreshButton"
+                                         Content="Refresh"
+                                         Click="OnGitRefreshClicked" />
+                    </Grid>
+                    <TextBlock x:Name="GitStatusEmpty"
+                               Text="Working tree clean."
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               Visibility="Collapsed" />
+                    <ListView x:Name="GitStatusList"
+                              SelectionMode="None"
+                              IsItemClickEnabled="True"
+                              ItemClick="OnGitStatusItemClicked"
+                              MaxHeight="260" />
+                </StackPanel>
+            </Border>
+
             <Button
-                Grid.Row="3"
+                Grid.Row="4"
                 Content="Validate repository"
                 Click="OnValidateClicked"
                 HorizontalAlignment="Left" />
 
             <InfoBar
-                Grid.Row="4"
+                Grid.Row="5"
                 x:Name="ValidationBar"
                 IsClosable="False"
                 IsOpen="False" />
 
-            <ScrollViewer Grid.Row="5" MaxHeight="240">
+            <ScrollViewer Grid.Row="6" MaxHeight="240">
                 <ItemsControl x:Name="ValidationDetails">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="x:String">

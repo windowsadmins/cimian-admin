@@ -19,14 +19,20 @@
                        Grid.Column="0"
                        Style="{StaticResource CaptionTextBlockStyle}"
                        VerticalAlignment="Center" />
-            <Border Grid.Column="1"
-                    Background="{ThemeResource SubtleFillColorTertiaryBrush}"
-                    CornerRadius="4"
-                    Padding="6,1,6,1">
-                <TextBlock Text="pwsh"
-                           FontSize="10"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </Border>
+            <Button Grid.Column="1"
+                    x:Name="ExpandButton"
+                    Click="OnExpandClicked"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="6,2,6,2"
+                    MinWidth="0"
+                    Visibility="Visible">
+                <FontIcon Glyph="&#xE740;" FontSize="12"
+                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <ToolTipService.ToolTip>
+                    <TextBlock Text="Open in full editor" />
+                </ToolTipService.ToolTip>
+            </Button>
         </Grid>
 
         <Border Grid.Row="1"

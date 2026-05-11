@@ -127,18 +127,22 @@ public sealed partial class ChipListPicker : UserControl
             Spacing = 6,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        var onAccentText = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"];
         stack.Children.Add(new TextBlock
         {
             Text = name,
             VerticalAlignment = VerticalAlignment.Center,
+            Foreground = onAccentText,
         });
 
         var remove = new Button
         {
-            Content = new FontIcon { Glyph = "", FontSize = 10 },
+            Content = new FontIcon { Glyph = "", FontSize = 10, Foreground = onAccentText },
             Padding = new Thickness(4),
             MinWidth = 22,
             MinHeight = 22,
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentFillColorTertiaryBrush"],
+            BorderThickness = new Thickness(0),
         };
         var border = new Border
         {

@@ -72,6 +72,22 @@ public sealed partial class ScriptEditor : UserControl
         _highlightTimer.Tick += (_, _) => ApplyHighlighting();
     }
 
+    private async void OnExpandClicked(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ScriptFullEditorDialog
+        {
+            Label = Label,
+            ScriptText = ScriptText,
+            XamlRoot = XamlRoot,
+        };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            ScriptText = dialog.ScriptText;
+            ScriptChanged?.Invoke(this, new RoutedEventArgs());
+        }
+    }
+
     private void OnTextChanged(object sender, RoutedEventArgs e)
     {
         if (_suppressHighlight || _suppressTextChanged)

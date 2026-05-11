@@ -126,26 +126,21 @@ public sealed partial class ManifestEditor : UserControl
             BuildCatalogChecklist(manifest.Catalogs);
             NotesField.Text = manifest.Notes ?? string.Empty;
 
-            // Build per-picker context lists. A conditional only counts as a possible
-            // target for a given picker if it actually defines that field (selector returns
-            // non-null). This way Bootstrap.yaml — which has conditional_items: with empty
-            // managed_installs bodies and NO managed_apps — shows the conditional dropdown
-            // only on the managed_installs picker, not on every chip everywhere.
-            var miCtx = BuildContextsForField(manifest.ConditionalItems, c => c.ManagedInstalls);
-            var muCtx = BuildContextsForField(manifest.ConditionalItems, c => c.ManagedUninstalls);
-            var mupCtx = BuildContextsForField(manifest.ConditionalItems, c => c.ManagedUpdates);
-            var optCtx = BuildContextsForField(manifest.ConditionalItems, c => c.OptionalInstalls);
-            var incCtx = BuildContextsForField(manifest.ConditionalItems, c => c.IncludedManifests);
+            // One unified context list for all pickers — every conditional defined in the
+            // manifest is a valid target for any field, even if its current bucket is null.
+            // Picking a non-top-level option moves the chip into that conditional's bucket
+            // for the picker's field on save. If the manifest has no conditional_items, the
+            // list has only "(top level)" and ContextualChipList hides the dropdown.
+            var contexts = BuildContexts(manifest.ConditionalItems);
+            ManagedInstallsPicker.SetContexts(contexts);
+            ManagedUninstallsPicker.SetContexts(contexts);
+            ManagedUpdatesPicker.SetContexts(contexts);
+            OptionalInstallsPicker.SetContexts(contexts);
+            IncludedPicker.SetContexts(contexts);
 
-            ManagedInstallsPicker.SetContexts(miCtx);
-            ManagedUninstallsPicker.SetContexts(muCtx);
-            ManagedUpdatesPicker.SetContexts(mupCtx);
-            OptionalInstallsPicker.SetContexts(optCtx);
-            IncludedPicker.SetContexts(incCtx);
-
-            var anyManagedConditional = miCtx.Count > 1 || muCtx.Count > 1 || mupCtx.Count > 1 || optCtx.Count > 1;
-            ManagedConditionalHeader.Visibility = anyManagedConditional ? Visibility.Visible : Visibility.Collapsed;
-            IncludedHeaderRow.Visibility = incCtx.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+            var hasConditionals = contexts.Count > 1;
+            ManagedConditionalHeader.Visibility = hasConditionals ? Visibility.Visible : Visibility.Collapsed;
+            IncludedHeaderRow.Visibility = hasConditionals ? Visibility.Visible : Visibility.Collapsed;
 
             ManagedInstallsPicker.SetItems(CollectChipEntries(manifest.ConditionalItems, manifest.ManagedInstalls, c => c.ManagedInstalls));
             ManagedUninstallsPicker.SetItems(CollectChipEntries(manifest.ConditionalItems, manifest.ManagedUninstalls, c => c.ManagedUninstalls));
@@ -211,6 +206,53 @@ public sealed partial class ManifestEditor : UserControl
         {
             return;
         }
+        IsDirty = true;
+    }
+
+    private async void OnAddConditionalClicked(object sender, RoutedEventArgs e)
+    {
+        if (_manifest is null) return;
+
+        var input = new TextBox
+        {
+            PlaceholderText = "e.g. catalogs == \"Production\"",
+            AcceptsReturn = false,
+            MinWidth = 360,
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "New conditional",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "Condition expression",
+                        Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                    },
+                    input,
+                },
+            },
+            PrimaryButtonText = "Add",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        var expr = (input.Text ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(expr)) return;
+
+        // Apply current edits back to the model so any chips the user has been moving don't
+        // get clobbered when we re-populate after adding the new conditional.
+        ApplyEditsTo(_manifest);
+        _manifest.ConditionalItems ??= [];
+        _manifest.ConditionalItems.Add(new ConditionalItem { Condition = expr });
+        Populate(_manifest);
         IsDirty = true;
     }
 
@@ -338,19 +380,20 @@ public sealed partial class ManifestEditor : UserControl
     private const string TopLevelContextId = "";
 
     /// <summary>
-    /// Builds the list of contexts for a single field/picker. Top-level is always present;
-    /// a conditional is included only if its corresponding field bucket is non-null (i.e.
-    /// the key exists in the YAML, even if its list is empty). This avoids polluting every
-    /// picker with conditional dropdowns when the conditional has nothing to do with that
-    /// particular field.
+    /// Builds the unified context list for every picker on this manifest: top-level plus
+    /// every conditional_items entry (recursively, indented for nesting). All pickers share
+    /// the same list so the user can move any chip into any conditional, even when the
+    /// conditional's current bucket for that field is null.
     /// </summary>
-    private static List<ContextOption> BuildContextsForField(
-        List<ConditionalItem>? conditionals,
-        Func<ConditionalItem, List<string>?> selector)
+    private static List<ContextOption> BuildContexts(List<ConditionalItem>? conditionals)
     {
+        // Top-level uses an empty label so the closed ComboBox renders nothing — most
+        // chips live at top-level and we don't want every row repeating "(top level)".
+        // In the popup, that empty row is still the first/selectable option that means
+        // "remove from any conditional".
         var list = new List<ContextOption>
         {
-            new(TopLevelContextId, "(top level)", 0),
+            new(TopLevelContextId, string.Empty, 0),
         };
         if (conditionals is null) return list;
 
@@ -363,11 +406,8 @@ public sealed partial class ManifestEditor : UserControl
                     ? i.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     : $"{parentPath}.{i.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
-                if (selector(item) is not null)
-                {
-                    var label = ConditionalLabel(item);
-                    list.Add(new ContextOption(path, new string(' ', indent * 4) + label, indent));
-                }
+                var label = ConditionalLabel(item);
+                list.Add(new ContextOption(path, new string(' ', indent * 4) + label, indent));
 
                 if (item.NestedConditionalItems is { Count: > 0 } nested)
                 {

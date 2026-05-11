@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CimianAdmin.Views.ManifestsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:nodes="using:CimianAdmin.Models"
+    xmlns:local="using:CimianAdmin.Views">
+
+    <Grid ColumnSpacing="0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Grid Grid.Column="0" Padding="16,16,8,16" RowSpacing="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="Manifests" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <TextBox
+                Grid.Row="1"
+                PlaceholderText="Search manifests"
+                Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <ComboBox
+                Grid.Row="2"
+                x:Name="CatalogFilterBox"
+                PlaceholderText="Filter by catalog"
+                HorizontalAlignment="Stretch"
+                SelectionChanged="OnCatalogFilterChanged" />
+            <TextBlock
+                Grid.Row="3"
+                x:Name="CountText"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+            <muxc:TreeView
+                Grid.Row="4"
+                x:Name="ManifestTree"
+                ItemsSource="{x:Bind ViewModel.RootNodes, Mode=OneWay}"
+                ItemInvoked="OnNodeInvoked"
+                SelectionMode="Single">
+                <muxc:TreeView.ItemTemplate>
+                    <DataTemplate x:DataType="nodes:ManifestTreeNode">
+                        <muxc:TreeViewItem
+                            ItemsSource="{x:Bind Children}"
+                            IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <muxc:TreeViewItem.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem
+                                        Text="Open in new window"
+                                        Click="OnOpenInNewWindow"
+                                        Tag="{x:Bind FullPath}" />
+                                </MenuFlyout>
+                            </muxc:TreeViewItem.ContextFlyout>
+                            <Grid ColumnSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon
+                                    Grid.Column="0"
+                                    FontSize="14"
+                                    Glyph="{x:Bind local:ManifestsPage.NodeGlyph(HasManifest)}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    VerticalAlignment="Center" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Text="{x:Bind Name}"
+                                    VerticalAlignment="Center" />
+                            </Grid>
+                        </muxc:TreeViewItem>
+                    </DataTemplate>
+                </muxc:TreeView.ItemTemplate>
+            </muxc:TreeView>
+        </Grid>
+
+        <Border
+            Grid.Column="1"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1,0,0,0">
+            <Grid>
+                <muxc:ProgressRing
+                    IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
+                    Width="48"
+                    Height="48" />
+                <local:ManifestEditor x:Name="Editor" />
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

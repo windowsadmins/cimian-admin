@@ -1,9 +1,10 @@
 namespace CimianAdmin;
 
-using System;
-using System.IO;
-using System.Threading.Tasks;
+using CimianAdmin.Core.Models.Repository;
+using CimianAdmin.Core.Services;
 using CimianAdmin.Shared;
+using CimianAdmin.ViewModels;
+using CimianAdmin.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
@@ -11,74 +12,280 @@ using WinRT.Interop;
 
 public sealed partial class MainWindow : Window
 {
-    public MainWindow()
+    private readonly IRepositoryService _repositoryService;
+    private readonly MainViewModel _mainViewModel;
+    private bool _suppressNavSelection;
+    private string? _currentTag;
+
+    // Linear browser-style history. `_historyIndex` points at the *current* entry;
+    // Back/Forward move the index and replay the entry. _suppressHistoryPush is set
+    // during replay so we don't re-record those navigations.
+    private sealed record NavEntry(string Tag, object? Selection);
+
+    private readonly List<NavEntry> _history = [];
+    private int _historyIndex = -1;
+    private bool _suppressHistoryPush;
+
+    public MainWindow(IRepositoryService repositoryService, MainViewModel mainViewModel)
     {
+        ArgumentNullException.ThrowIfNull(repositoryService);
+        ArgumentNullException.ThrowIfNull(mainViewModel);
+        _repositoryService = repositoryService;
+        _mainViewModel = mainViewModel;
+
         InitializeComponent();
-        Title = $"{Constants.AppName} {Constants.AppVersion}";
+
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+        Title = Constants.AppName;
+
+        _repositoryService.RepositoryChanged += OnRepositoryChanged;
+        UpdateRepoTitle(_repositoryService.CurrentRepository);
+        UpdateNavEnabled(_repositoryService.CurrentRepository is not null);
     }
 
-    private async void OnBrowseClicked(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Switches the content frame to the page identified by <paramref name="tag"/>
+    /// and selects the corresponding nav item without re-firing SelectionChanged.
+    /// </summary>
+    public void NavigateTo(string tag)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tag);
+
+        if (string.Equals(_currentTag, tag, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var page = ResolvePage(tag);
+        if (page is null)
+        {
+            return;
+        }
+
+        ContentFrame.Content = page;
+        _currentTag = tag;
+
+        var item = FindNavItem(tag);
+        if (item is not null && !ReferenceEquals(NavView.SelectedItem, item))
+        {
+            _suppressNavSelection = true;
+            try
+            {
+                NavView.SelectedItem = item;
+            }
+            finally
+            {
+                _suppressNavSelection = false;
+            }
+        }
+
+        PushHistory(new NavEntry(tag, null));
+    }
+
+    /// <summary>
+    /// Records the current selection on the active page. Called by PackagesPage /
+    /// ManifestsPage when the user picks a row, so back/forward replays the selection.
+    /// </summary>
+    public void RecordSelection(string tag, object? selection)
+    {
+        if (_suppressHistoryPush) return;
+        // If the last entry is for the same tag, replace its selection rather than
+        // pushing a new entry — otherwise scrolling through rows pollutes history.
+        if (_historyIndex >= 0 && _historyIndex < _history.Count
+            && string.Equals(_history[_historyIndex].Tag, tag, StringComparison.Ordinal)
+            && _history[_historyIndex].Selection is null)
+        {
+            _history[_historyIndex] = new NavEntry(tag, selection);
+            UpdateBackForwardEnabled();
+            return;
+        }
+        PushHistory(new NavEntry(tag, selection));
+    }
+
+    private void PushHistory(NavEntry entry)
+    {
+        if (_suppressHistoryPush) return;
+        // Trim any forward history once the user takes a new action.
+        if (_historyIndex < _history.Count - 1)
+        {
+            _history.RemoveRange(_historyIndex + 1, _history.Count - _historyIndex - 1);
+        }
+        _history.Add(entry);
+        _historyIndex = _history.Count - 1;
+        UpdateBackForwardEnabled();
+    }
+
+    private void OnBackClicked(object sender, RoutedEventArgs e)
+    {
+        if (_historyIndex <= 0) return;
+        _historyIndex--;
+        ReplayCurrentEntry();
+    }
+
+    private void OnForwardClicked(object sender, RoutedEventArgs e)
+    {
+        if (_historyIndex >= _history.Count - 1) return;
+        _historyIndex++;
+        ReplayCurrentEntry();
+    }
+
+    private void ReplayCurrentEntry()
+    {
+        var entry = _history[_historyIndex];
+        _suppressHistoryPush = true;
+        try
+        {
+            if (!string.Equals(_currentTag, entry.Tag, StringComparison.Ordinal))
+            {
+                NavigateTo(entry.Tag);
+            }
+
+            switch (entry.Selection)
+            {
+                case CimianAdmin.Core.Models.Packages.Package pkg:
+                    App.PendingPackageSelection = pkg;
+                    if (ContentFrame.Content is Views.PackagesPage pp)
+                    {
+                        pp.SelectPending();
+                    }
+                    break;
+                case CimianAdmin.Core.Models.Manifests.Manifest mf:
+                    App.PendingManifestSelection = mf;
+                    if (ContentFrame.Content is Views.ManifestsPage mp)
+                    {
+                        mp.SelectPending();
+                    }
+                    break;
+            }
+        }
+        finally
+        {
+            _suppressHistoryPush = false;
+            UpdateBackForwardEnabled();
+        }
+    }
+
+    private void UpdateBackForwardEnabled()
+    {
+        BackButton.IsEnabled = _historyIndex > 0;
+        ForwardButton.IsEnabled = _historyIndex < _history.Count - 1;
+    }
+
+    /// <summary>
+    /// Navigates to the Packages page and asks it to select the given package once it loads.
+    /// </summary>
+    public void NavigateToPackage(CimianAdmin.Core.Models.Packages.Package package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        App.PendingPackageSelection = package;
+        NavigateTo("packages");
+    }
+
+    /// <summary>
+    /// Navigates to the Manifests page and asks it to select the given manifest once it loads.
+    /// </summary>
+    public void NavigateToManifest(CimianAdmin.Core.Models.Manifests.Manifest manifest)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+        App.PendingManifestSelection = manifest;
+        NavigateTo("manifests");
+    }
+
+    /// <summary>
+    /// Pops the WinUI 3 FolderPicker and, if the user picks a folder, opens it as the
+    /// current repository.  Returns true if a repository was opened.
+    /// </summary>
+    public async Task<bool> PromptAndOpenRepositoryAsync()
     {
         try
         {
             var picker = new FolderPicker();
             picker.FileTypeFilter.Add("*");
             InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
             var folder = await picker.PickSingleFolderAsync();
-            if (folder is not null)
+            if (folder is null)
             {
-                RepositoryPathBox.Text = folder.Path;
+                return false;
             }
+
+            return await _mainViewModel.OpenRepositoryAsync(folder.Path).ConfigureAwait(true);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            StatusText.Text = $"Browse failed: {ex.Message}";
+            return false;
         }
     }
 
-    private void OnOpenClicked(object sender, RoutedEventArgs e)
+    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        var path = RepositoryPathBox.Text?.Trim() ?? string.Empty;
-        if (string.IsNullOrEmpty(path))
+        if (_suppressNavSelection || args.SelectedItem is not NavigationViewItem item || item.Tag is not string tag)
         {
-            StatusText.Text = "Enter or browse for a repository path.";
             return;
         }
 
-        if (!Directory.Exists(path))
-        {
-            StatusText.Text = $"Path not found: {path}";
-            return;
-        }
+        NavigateTo(tag);
+    }
 
-        var catalogs = Path.Combine(path, Constants.RepositoryDirectories.Catalogs);
-        var manifests = Path.Combine(path, Constants.RepositoryDirectories.Manifests);
-        var pkgsinfo = Path.Combine(path, Constants.RepositoryDirectories.PkgsInfo);
-        var pkgs = Path.Combine(path, Constants.RepositoryDirectories.Pkgs);
-
-        var report = new System.Text.StringBuilder();
-        report.AppendLine($"Root:      {path}");
-        report.AppendLine($"catalogs/  {(Directory.Exists(catalogs) ? "OK" : "missing")}");
-        report.AppendLine($"manifests/ {(Directory.Exists(manifests) ? "OK" : "missing")}");
-        report.AppendLine($"pkgsinfo/  {(Directory.Exists(pkgsinfo) ? "OK" : "missing")}");
-        report.AppendLine($"pkgs/      {(Directory.Exists(pkgs) ? "OK" : "missing")}");
-
-        if (Directory.Exists(pkgsinfo))
+    private void OnRepositoryChanged(object? sender, CimianRepository? repository)
+    {
+        if (DispatcherQueue is null || DispatcherQueue.HasThreadAccess)
         {
-            var count = Directory.GetFiles(pkgsinfo, "*.yaml", SearchOption.AllDirectories).Length;
-            report.AppendLine($"pkginfo files: {count}");
+            ApplyRepositoryChange(repository);
         }
-        if (Directory.Exists(manifests))
+        else
         {
-            var count = Directory.GetFiles(manifests, "*.yaml", SearchOption.AllDirectories).Length;
-            report.AppendLine($"manifest files: {count}");
+            DispatcherQueue.TryEnqueue(() => ApplyRepositoryChange(repository));
         }
-        if (Directory.Exists(catalogs))
-        {
-            var count = Directory.GetFiles(catalogs, "*.yaml", SearchOption.AllDirectories).Length;
-            report.AppendLine($"catalog files: {count}");
-        }
+    }
 
-        StatusText.Text = report.ToString();
+    private void ApplyRepositoryChange(CimianRepository? repository)
+    {
+        UpdateRepoTitle(repository);
+        UpdateNavEnabled(repository is not null);
+
+        if (repository is not null)
+        {
+            NavigateTo("repository");
+        }
+    }
+
+    private void UpdateRepoTitle(CimianRepository? repository)
+    {
+        RepoTitleText.Text = repository is null ? string.Empty : repository.Name;
+    }
+
+    private void UpdateNavEnabled(bool enabled)
+    {
+        NavRepository.IsEnabled = enabled;
+        NavPackages.IsEnabled = enabled;
+        NavManifests.IsEnabled = enabled;
+        NavCatalogs.IsEnabled = enabled;
+    }
+
+    private NavigationViewItem? FindNavItem(string tag)
+    {
+        return tag switch
+        {
+            "repository" => NavRepository,
+            "packages" => NavPackages,
+            "manifests" => NavManifests,
+            "catalogs" => NavCatalogs,
+            _ => null,
+        };
+    }
+
+    private static Page? ResolvePage(string tag)
+    {
+        return tag switch
+        {
+            "welcome" => App.Resolve<WelcomePage>(),
+            "repository" => App.Resolve<RepositoryPage>(),
+            "packages" => App.Resolve<PackagesPage>(),
+            "manifests" => App.Resolve<ManifestsPage>(),
+            "catalogs" => App.Resolve<CatalogsPage>(),
+            _ => null,
+        };
     }
 }

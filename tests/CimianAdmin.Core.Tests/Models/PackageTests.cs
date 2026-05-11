@@ -13,9 +13,9 @@ public class PackageTests
         package.Name.Should().BeEmpty();
         package.Version.Should().BeEmpty();
         package.Catalogs.Should().BeEmpty();
-        package.UnattendedInstall.Should().BeTrue();
-        package.UnattendedUninstall.Should().BeTrue();
-        package.Autoremove.Should().BeFalse();
+        package.UnattendedInstall.Should().BeFalse();
+        package.UnattendedUninstall.Should().BeFalse();
+        package.OnDemand.Should().BeFalse();
     }
 
     [Fact]

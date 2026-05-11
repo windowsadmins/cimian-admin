@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- xUnit conventionally uses Method_State_Expected naming with underscores. -->
+    <!-- Test classes implementing IDisposable for setup/teardown don't follow the full Dispose(bool) pattern. -->
+    <NoWarn>$(NoWarn);CA1707;CA1063;CA1816</NoWarn>
+  </PropertyGroup>
+</Project>

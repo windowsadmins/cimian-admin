@@ -15,7 +15,7 @@
     <!-- CA1515: WinUI 3 partial classes need to remain public for the XAML compiler -->
     <!-- CA5392: WindowsAppSDK auto-init source ships without DefaultDllImportSearchPaths -->
     <!-- CA1305/CA1031: pedantic for UI string formatting and top-level click handlers -->
-    <NoWarn>$(NoWarn);CA1716;CA1034;CA1002;CA2227;CA1003;CA1515;CA5392;CA1305;CA1031</NoWarn>
+    <NoWarn>$(NoWarn);CA1716;CA1034;CA1002;CA2227;CA1003;CA1515;CA5392;CA1305;CA1031;CA1308</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>

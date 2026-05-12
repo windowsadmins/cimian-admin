@@ -212,8 +212,24 @@ public sealed class GitService : IGitService
     {
         try
         {
-            using var repo = new Repository(info.GitRoot);
             var relative = Path.GetRelativePath(info.GitRoot, absoluteFilePath).Replace('\\', '/');
+
+            // Reject paths that climb out of the worktree — passing "../foo" to
+            // LibGit2Sharp would query a file the repo can't see and confuses status.
+            if (relative.StartsWith("../", StringComparison.Ordinal) || relative == "..")
+            {
+                return false;
+            }
+            // If the deployment root is a subdirectory of the git root, the file must
+            // sit under it; otherwise we'd report status for unrelated parent-repo work.
+            if (!string.IsNullOrEmpty(info.RelativeRepoPath) &&
+                !relative.StartsWith(info.RelativeRepoPath + "/", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(relative, info.RelativeRepoPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            using var repo = new Repository(info.GitRoot);
             var status = repo.RetrieveStatus(relative);
             if (status == FileStatus.Unaltered || status == FileStatus.Nonexistent || status == FileStatus.Ignored)
             {

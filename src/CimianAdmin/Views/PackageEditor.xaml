@@ -53,7 +53,11 @@
                                VerticalAlignment="Center" />
                     <Button x:Name="DeleteButton" Click="OnDeleteClicked">
                         <Button.Content>
-                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            <ImageIcon Width="14" Height="14">
+                                <ImageIcon.Source>
+                                    <SvgImageSource UriSource="ms-appx:///Assets/trash-2.svg" />
+                                </ImageIcon.Source>
+                            </ImageIcon>
                         </Button.Content>
                         <ToolTipService.ToolTip>
                             <TextBlock Text="Delete this pkginfo file" />

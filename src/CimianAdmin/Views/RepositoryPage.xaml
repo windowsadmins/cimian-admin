@@ -42,7 +42,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBox Grid.Column="0"
                          x:Name="SearchBox"
-                         PlaceholderText="Search packages and manifests (content, not just names)"
+                         PlaceholderText="Search packages and manifests content"
                          TextChanged="OnSearchTextChanged" />
                 <Border Grid.Column="1"
                         x:Name="IndexingPill"

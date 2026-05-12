@@ -2,6 +2,7 @@ namespace CimianAdmin.Views;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 
 /// <summary>
 /// AutoSuggestBox + chip list with X-to-remove. Used for any pkginfo / manifest field
@@ -137,7 +138,7 @@ public sealed partial class ChipListPicker : UserControl
 
         var remove = new Button
         {
-            Content = new FontIcon { Glyph = "", FontSize = 10, Foreground = onAccentText },
+            Content = new ImageIcon { Width = 10, Height = 10, Foreground = onAccentText, Source = new SvgImageSource(new Uri("ms-appx:///Assets/x.svg")) },
             Padding = new Thickness(4),
             MinWidth = 22,
             MinHeight = 22,

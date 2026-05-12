@@ -3,6 +3,7 @@ namespace CimianAdmin.Views;
 using System.Globalization;
 using CimianAdmin.Core.Models.Catalogs;
 using CimianAdmin.Core.Models.Packages;
+using CimianAdmin.Core.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -84,9 +85,34 @@ public sealed partial class CatalogCompareDialog : ContentDialog
             ? null
             : _catalogs.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
 
-    private void OnPackageDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+    private async void OnPackageDoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
-        if ((e.OriginalSource as FrameworkElement)?.DataContext is not Package package) return;
-        App.Resolve<PackageEditorWindow>().Open(package);
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is not Package catalogEntry) return;
+
+        // Packages surfaced from catalog YAML don't carry FilePath — they're a flattened
+        // copy of the pkginfo, not the file on disk. Look up the live pkginfo so the
+        // editor can save back.
+        try
+        {
+            var packageService = App.Resolve<IPackageService>();
+            var all = await packageService.GetAllPackagesAsync().ConfigureAwait(true);
+            var live = all.FirstOrDefault(p =>
+                string.Equals(p.Name, catalogEntry.Name, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(p.Version ?? string.Empty, catalogEntry.Version ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+
+            if (live is null)
+            {
+                // Fallback by name only, then give up rather than open a save-broken editor.
+                live = all.FirstOrDefault(p => string.Equals(p.Name, catalogEntry.Name, StringComparison.OrdinalIgnoreCase));
+            }
+            if (live is null) return;
+
+            App.Resolve<PackageEditorWindow>().Open(live);
+        }
+        catch
+        {
+            // If the lookup itself fails, swallow — opening a read-only catalog entry
+            // would just produce the same Save error the user already hit.
+        }
     }
 }

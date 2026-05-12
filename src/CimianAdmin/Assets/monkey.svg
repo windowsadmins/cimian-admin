@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lucide-styled monkey face. Hand-drawn, MIT-licensed (CimianAdmin asset). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Head -->
+  <path d="M5 13a7 7 0 0 1 14 0v2a5 5 0 0 1-5 5h-4a5 5 0 0 1-5-5z"/>
+  <!-- Ears -->
+  <circle cx="5" cy="9" r="2"/>
+  <circle cx="19" cy="9" r="2"/>
+  <!-- Inner muzzle -->
+  <path d="M9 15a3 3 0 0 0 6 0"/>
+  <!-- Eyes -->
+  <circle cx="9.5" cy="11" r="0.6" fill="currentColor"/>
+  <circle cx="14.5" cy="11" r="0.6" fill="currentColor"/>
+</svg>

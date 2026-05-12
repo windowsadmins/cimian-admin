@@ -23,8 +23,9 @@ public sealed partial class PackagesPage : Page
         Unloaded += OnUnloaded;
     }
 
-    // Segoe Fluent: Package (E7B8) for package leaves, Tag (E8EC) for category groups.
-    public static string NodeGlyph(bool hasPackage) => hasPackage ? "\uE7B8" : "\uE8EC";
+    // Lucide: file-text for package leaves, folder for category groups.
+    public static Uri NodeIconUri(bool hasPackage) =>
+        new(hasPackage ? "ms-appx:///Assets/file-text.svg" : "ms-appx:///Assets/folder.svg");
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -38,9 +39,20 @@ public sealed partial class PackagesPage : Page
     {
         if (App.PendingPackageSelection is not { } pending) return;
         App.PendingPackageSelection = null;
-        ViewModel.SelectedPackage = ViewModel.Packages.FirstOrDefault(
-            p => string.Equals(p.FilePath, pending.FilePath, StringComparison.OrdinalIgnoreCase))
-            ?? pending;
+
+        // Prefer matching by FilePath; fall back to name+version because callers
+        // like the Catalog tree pass packages reconstructed from catalog YAML which
+        // have no FilePath. Using `?? pending` as a last resort would land us in a
+        // save-broken editor (Package.FilePath is required before save).
+        var live = ViewModel.Packages.FirstOrDefault(p =>
+            !string.IsNullOrEmpty(pending.FilePath) &&
+            string.Equals(p.FilePath, pending.FilePath, StringComparison.OrdinalIgnoreCase));
+        live ??= ViewModel.Packages.FirstOrDefault(p =>
+            string.Equals(p.Name, pending.Name, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(p.Version ?? string.Empty, pending.Version ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+        live ??= ViewModel.Packages.FirstOrDefault(p =>
+            string.Equals(p.Name, pending.Name, StringComparison.OrdinalIgnoreCase));
+        ViewModel.SelectedPackage = live ?? pending;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)

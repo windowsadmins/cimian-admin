@@ -156,6 +156,46 @@ public sealed partial class GitPage : Page
         scopePicker.ItemsSource = new List<string> { "This repository only", "Global (~/.gitconfig)" };
         scopePicker.SelectedIndex = 0;
 
+        var testButton = new Button { Content = "Test authentication" };
+        var testRing = new ProgressRing { Width = 16, Height = 16, IsActive = false, VerticalAlignment = VerticalAlignment.Center };
+        var testStatus = new TextBlock
+        {
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var testRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        testRow.Children.Add(testButton);
+        testRow.Children.Add(testRing);
+        testRow.Children.Add(testStatus);
+
+        testButton.Click += async (_, _) =>
+        {
+            if (_info is null) return;
+            testButton.IsEnabled = false;
+            testRing.IsActive = true;
+            testStatus.Text = "Running git ls-remote…";
+            testStatus.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+            try
+            {
+                var result = await _gitService.TestAuthAsync(_info).ConfigureAwait(true);
+                testStatus.Text = result.Success ? "Auth OK — remote responded." : Truncate(result.Output, 240);
+                testStatus.Foreground = result.Success
+                    ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorSuccessBrush"]
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
+            }
+            catch (Exception ex)
+            {
+                testStatus.Text = ex.Message;
+                testStatus.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
+            }
+            finally
+            {
+                testRing.IsActive = false;
+                testButton.IsEnabled = true;
+            }
+        };
+
         var body = new StackPanel { Spacing = 8 };
         body.Children.Add(new TextBlock { Text = "Name", Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
         body.Children.Add(nameBox);
@@ -163,6 +203,13 @@ public sealed partial class GitPage : Page
         body.Children.Add(emailBox);
         body.Children.Add(new TextBlock { Text = "Scope", Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] });
         body.Children.Add(scopePicker);
+        body.Children.Add(new Border
+        {
+            Margin = new Thickness(0, 4, 0, 0),
+            Height = 1,
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+        });
+        body.Children.Add(testRow);
 
         var dialog = new ContentDialog
         {
@@ -207,20 +254,11 @@ public sealed partial class GitPage : Page
         }
     }
 
-    private async void OnTestAuthClicked(object sender, RoutedEventArgs e)
+    private static string Truncate(string value, int max)
     {
-        if (_info is null) return;
-        var progress = ShowProgress("Testing authentication (git ls-remote)…");
-        try
-        {
-            var result = await _gitService.TestAuthAsync(_info, progress).ConfigureAwait(true);
-            if (result.Success) ShowSuccess("Auth OK — remote responded.");
-            else ShowError("Auth failed", result.Output);
-        }
-        finally
-        {
-            HideProgress();
-        }
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        var trimmed = value.Replace("\r", string.Empty, StringComparison.Ordinal).Trim();
+        return trimmed.Length <= max ? trimmed : trimmed[..max] + "…";
     }
 
     private Progress<string> ShowProgress(string title)
@@ -487,7 +525,7 @@ public sealed partial class GitPage : Page
         }
     }
 
-    private static Color LineColor(string line)
+    private Color LineColor(string line)
     {
         if (line.StartsWith("+++", StringComparison.Ordinal) || line.StartsWith("---", StringComparison.Ordinal))
             return MutedColor;
@@ -497,7 +535,10 @@ public sealed partial class GitPage : Page
             return AddColor;
         if (line.StartsWith('-'))
             return RemoveColor;
-        return Color.FromArgb(0xFF, 0xD4, 0xD4, 0xD4);
+        // Default body text: light-grey on dark backgrounds, near-black on light ones.
+        return ActualTheme == ElementTheme.Dark
+            ? Color.FromArgb(0xFF, 0xD4, 0xD4, 0xD4)
+            : Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F);
     }
 
     private void ClearDiff()

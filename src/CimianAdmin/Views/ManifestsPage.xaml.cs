@@ -24,7 +24,8 @@ public sealed partial class ManifestsPage : Page
     }
 
     // Segoe Fluent glyphs: Document (E8A5) for manifest leaves, FolderHorizontal (E8B7) for synthetic folders.
-    public static string NodeGlyph(bool hasManifest) => hasManifest ? "\uE8A5" : "\uE8B7";
+    public static Uri NodeIconUri(bool hasManifest) =>
+        new(hasManifest ? "ms-appx:///Assets/file-text.svg" : "ms-appx:///Assets/folder.svg");
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

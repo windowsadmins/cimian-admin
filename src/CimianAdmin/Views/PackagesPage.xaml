@@ -57,12 +57,15 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <FontIcon
+                                <ImageIcon
                                     Grid.Column="0"
-                                    FontSize="14"
-                                    Glyph="{x:Bind local:PackagesPage.NodeGlyph(HasPackage)}"
+                                    Width="14" Height="14"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    VerticalAlignment="Center" />
+                                    VerticalAlignment="Center">
+                                    <ImageIcon.Source>
+                                        <SvgImageSource UriSource="{x:Bind local:PackagesPage.NodeIconUri(HasPackage)}" />
+                                    </ImageIcon.Source>
+                                </ImageIcon>
                                 <TextBlock
                                     Grid.Column="1"
                                     Text="{x:Bind Name}"

@@ -27,8 +27,12 @@
                     Padding="6,2,6,2"
                     MinWidth="0"
                     Visibility="Visible">
-                <FontIcon Glyph="&#xE740;" FontSize="12"
-                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <ImageIcon Width="12" Height="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                    <ImageIcon.Source>
+                        <SvgImageSource UriSource="ms-appx:///Assets/maximize-2.svg" />
+                    </ImageIcon.Source>
+                </ImageIcon>
                 <ToolTipService.ToolTip>
                     <TextBlock Text="Open in full editor" />
                 </ToolTipService.ToolTip>

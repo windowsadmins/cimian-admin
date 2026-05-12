@@ -2,6 +2,7 @@ namespace CimianAdmin.Views;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 
 /// <summary>
 /// Chip list where each chip carries a "context" — top-level vs. one of the manifest's
@@ -145,10 +146,10 @@ public sealed partial class ContextualChipList : UserControl
         // Drag handle — visual affordance for reorder. The actual drag is handled by the
         // outer ListView via CanReorderItems / CanDragItems, but we surface the grip so
         // users know rows are reorderable.
-        var dragHandle = new FontIcon
+        var dragHandle = new ImageIcon
         {
-            Glyph = "", // GripperBarHorizontal
-            FontSize = 12,
+            Width = 12, Height = 12,
+            Source = new Microsoft.UI.Xaml.Media.Imaging.SvgImageSource(new Uri("ms-appx:///Assets/grip-vertical.svg")),
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 4, 0),
@@ -174,7 +175,7 @@ public sealed partial class ContextualChipList : UserControl
 
         var remove = new Button
         {
-            Content = new FontIcon { Glyph = "", FontSize = 10 },
+            Content = new ImageIcon { Width = 10, Height = 10, Source = new SvgImageSource(new Uri("ms-appx:///Assets/x.svg")) },
             Padding = new Thickness(4),
             MinWidth = 22,
             MinHeight = 22,

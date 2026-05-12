@@ -20,6 +20,8 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Spacing="4">
@@ -33,8 +35,63 @@
                     TextWrapping="Wrap" />
             </StackPanel>
 
+            <Grid Grid.Row="1" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         x:Name="SearchBox"
+                         PlaceholderText="Search packages and manifests (content, not just names)"
+                         TextChanged="OnSearchTextChanged" />
+                <Border Grid.Column="1"
+                        x:Name="IndexingPill"
+                        Visibility="Collapsed"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10,4,10,4"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="IndexingPillText"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="2"
+                    x:Name="SearchResultsCard"
+                    Visibility="Collapsed"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20,12,20,12">
+                <StackPanel Spacing="8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   x:Name="SearchResultsHeader"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Grid.Column="1"
+                                   x:Name="SearchResultsCount"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                    <ListView x:Name="SearchResultsList"
+                              SelectionMode="None"
+                              IsItemClickEnabled="True"
+                              ItemClick="OnSearchResultClicked"
+                              MaxHeight="360" />
+                </StackPanel>
+            </Border>
+
             <ItemsControl
-                Grid.Row="1"
+                Grid.Row="3"
                 x:Name="StatsHost">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -43,7 +100,7 @@
                 </ItemsControl.ItemsPanel>
             </ItemsControl>
 
-            <Grid Grid.Row="2" ColumnSpacing="16">
+            <Grid Grid.Row="4" ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -96,7 +153,7 @@
                 </Border>
             </Grid>
 
-            <Border Grid.Row="3"
+            <Border Grid.Row="5"
                     x:Name="GitStatusCard"
                     Visibility="Collapsed"
                     Background="{ThemeResource LayerFillColorDefaultBrush}"
@@ -124,18 +181,18 @@
             </Border>
 
             <Button
-                Grid.Row="4"
+                Grid.Row="6"
                 Content="Validate repository"
                 Click="OnValidateClicked"
                 HorizontalAlignment="Left" />
 
             <InfoBar
-                Grid.Row="5"
+                Grid.Row="7"
                 x:Name="ValidationBar"
                 IsClosable="False"
                 IsOpen="False" />
 
-            <ScrollViewer Grid.Row="6" MaxHeight="240">
+            <ScrollViewer Grid.Row="8" MaxHeight="240">
                 <ItemsControl x:Name="ValidationDetails">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="x:String">

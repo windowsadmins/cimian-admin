@@ -10,6 +10,7 @@ public sealed partial class MainViewModel : ObservableObject
 {
     private readonly ISettingsService _settings;
     private readonly IRepositoryService _repositoryService;
+    private readonly ISearchService _searchService;
 
     [ObservableProperty]
     public partial CimianRepository? CurrentRepository { get; set; }
@@ -23,12 +24,14 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     public partial ObservableCollection<string> RecentRepositories { get; set; } = [];
 
-    public MainViewModel(ISettingsService settings, IRepositoryService repositoryService)
+    public MainViewModel(ISettingsService settings, IRepositoryService repositoryService, ISearchService searchService)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(repositoryService);
+        ArgumentNullException.ThrowIfNull(searchService);
         _settings = settings;
         _repositoryService = repositoryService;
+        _searchService = searchService;
         _repositoryService.RepositoryChanged += OnRepositoryChanged;
     }
 
@@ -88,5 +91,16 @@ public sealed partial class MainViewModel : ObservableObject
         CurrentRepository = repository;
         CurrentRepositoryPath = repository?.RootPath ?? string.Empty;
         HasRepository = repository is not null;
+
+        // Kick off (or tear down) the search index. Fire-and-forget — the search UI
+        // surfaces indexing progress on its own.
+        if (repository is null)
+        {
+            _ = _searchService.StopAsync();
+        }
+        else
+        {
+            _ = _searchService.StartAsync(repository.RootPath);
+        }
     }
 }

@@ -5,8 +5,10 @@ using CimianAdmin.Core.Models.Git;
 using CimianAdmin.Core.Models.Manifests;
 using CimianAdmin.Core.Models.Packages;
 using CimianAdmin.Core.Models.Repository;
+using CimianAdmin.Core.Models.Search;
 using CimianAdmin.Core.Services;
 using Microsoft.UI;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -14,33 +16,45 @@ using Microsoft.UI.Xaml.Media;
 public sealed partial class RepositoryPage : Page
 {
     private const int RecentLimit = 10;
+    private const int SearchDebounceMs = 150;
+    private const int SearchMaxResults = 50;
 
     private readonly IRepositoryService _repositoryService;
     private readonly IPackageService _packageService;
     private readonly IManifestService _manifestService;
     private readonly IGitService _gitService;
+    private readonly ISearchService _searchService;
+    private readonly DispatcherQueue _dispatcher;
 
     private List<Package> _recentPackages = [];
     private List<Manifest> _recentManifests = [];
     private GitRepositoryInfo? _gitInfo;
     private List<GitStatusEntry> _gitEntries = [];
 
+    private int _searchEpoch;
+    private List<SearchHit> _currentHits = [];
+
     public RepositoryPage(
         IRepositoryService repositoryService,
         IPackageService packageService,
         IManifestService manifestService,
-        IGitService gitService)
+        IGitService gitService,
+        ISearchService searchService)
     {
         ArgumentNullException.ThrowIfNull(repositoryService);
         ArgumentNullException.ThrowIfNull(packageService);
         ArgumentNullException.ThrowIfNull(manifestService);
         ArgumentNullException.ThrowIfNull(gitService);
+        ArgumentNullException.ThrowIfNull(searchService);
         _repositoryService = repositoryService;
         _packageService = packageService;
         _manifestService = manifestService;
         _gitService = gitService;
+        _searchService = searchService;
+        _dispatcher = DispatcherQueue.GetForCurrentThread();
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -56,8 +70,156 @@ public sealed partial class RepositoryPage : Page
         RepoNameText.Text = repo.Name;
         RepoPathText.Text = repo.RootPath;
         BuildStatCards(repo);
+        _searchService.ProgressChanged += OnSearchProgress;
+        UpdateIndexingPill(_searchService.IsReady ? null : new SearchIndexProgress(0, 0, false));
         await LoadRecentsAsync().ConfigureAwait(true);
         await LoadGitStatusAsync(repo).ConfigureAwait(true);
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        _searchService.ProgressChanged -= OnSearchProgress;
+        Interlocked.Increment(ref _searchEpoch);
+    }
+
+    private void OnSearchProgress(object? sender, SearchIndexProgress progress)
+    {
+        _dispatcher.TryEnqueue(() => UpdateIndexingPill(progress));
+    }
+
+    private void UpdateIndexingPill(SearchIndexProgress? progress)
+    {
+        if (progress is null || progress.IsComplete)
+        {
+            IndexingPill.Visibility = Visibility.Collapsed;
+            return;
+        }
+        IndexingPill.Visibility = Visibility.Visible;
+        IndexingPillText.Text = progress.Total > 0
+            ? string.Create(CultureInfo.InvariantCulture, $"indexing {progress.Indexed}/{progress.Total}…")
+            : "indexing…";
+    }
+
+    private async void OnSearchTextChanged(object sender, TextChangedEventArgs e)
+    {
+        var epoch = Interlocked.Increment(ref _searchEpoch);
+        var query = SearchBox.Text;
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            SearchResultsCard.Visibility = Visibility.Collapsed;
+            _currentHits = [];
+            return;
+        }
+
+        await Task.Delay(SearchDebounceMs).ConfigureAwait(true);
+        if (epoch != Volatile.Read(ref _searchEpoch)) return;
+
+        IReadOnlyList<SearchHit> hits;
+        try
+        {
+            hits = await _searchService.SearchAsync(query, SearchMaxResults).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        if (epoch != Volatile.Read(ref _searchEpoch)) return;
+        ShowResults(query, hits);
+    }
+
+    private void ShowResults(string query, IReadOnlyList<SearchHit> hits)
+    {
+        _currentHits = [.. hits];
+        SearchResultsCard.Visibility = Visibility.Visible;
+        SearchResultsHeader.Text = string.Create(CultureInfo.InvariantCulture, $"Results for “{query.Trim()}”");
+        SearchResultsCount.Text = hits.Count switch
+        {
+            0 => "no matches",
+            SearchMaxResults => string.Create(CultureInfo.InvariantCulture, $"showing first {SearchMaxResults}"),
+            1 => "1 match",
+            _ => string.Create(CultureInfo.InvariantCulture, $"{hits.Count} matches"),
+        };
+        SearchResultsList.ItemsSource = hits.Select(BuildResultRow).ToList();
+    }
+
+    private static FrameworkElement BuildResultRow(SearchHit hit)
+    {
+        var stack = new StackPanel { Spacing = 2 };
+        var headerStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        headerStack.Children.Add(new TextBlock
+        {
+            Text = hit.DisplayName,
+            Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
+        });
+        headerStack.Children.Add(new TextBlock
+        {
+            Text = hit.Kind == SearchHitKind.Package ? "package" : "manifest",
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        headerStack.Children.Add(new TextBlock
+        {
+            Text = string.Create(CultureInfo.InvariantCulture, $"line {hit.LineNumber}"),
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+            Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        stack.Children.Add(headerStack);
+        stack.Children.Add(new TextBlock
+        {
+            Text = hit.Snippet,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        return new Border
+        {
+            Padding = new Thickness(8, 6, 8, 6),
+            Child = stack,
+        };
+    }
+
+    private async void OnSearchResultClicked(object sender, ItemClickEventArgs e)
+    {
+        if (sender is not ListView view) return;
+        var index = view.Items.IndexOf(e.ClickedItem);
+        if (index < 0 || index >= _currentHits.Count) return;
+        await OpenHitAsync(_currentHits[index]).ConfigureAwait(true);
+    }
+
+    private async Task OpenHitAsync(SearchHit hit)
+    {
+        if (App.MainWindowInstance is not { } window) return;
+        var normalized = System.IO.Path.GetFullPath(hit.AbsolutePath);
+
+        if (hit.Kind == SearchHitKind.Package)
+        {
+            try
+            {
+                var packages = await _packageService.GetAllPackagesAsync().ConfigureAwait(true);
+                var match = packages.FirstOrDefault(p =>
+                    !string.IsNullOrEmpty(p.FilePath) &&
+                    string.Equals(System.IO.Path.GetFullPath(p.FilePath), normalized, StringComparison.OrdinalIgnoreCase));
+                if (match is not null) window.NavigateToPackage(match);
+            }
+            catch { }
+        }
+        else
+        {
+            try
+            {
+                var manifests = await _manifestService.GetAllManifestsAsync().ConfigureAwait(true);
+                var match = manifests.FirstOrDefault(m =>
+                    !string.IsNullOrEmpty(m.FilePath) &&
+                    string.Equals(System.IO.Path.GetFullPath(m.FilePath), normalized, StringComparison.OrdinalIgnoreCase));
+                if (match is not null) window.NavigateToManifest(match);
+            }
+            catch { }
+        }
     }
 
     private async Task LoadGitStatusAsync(CimianRepository repo)

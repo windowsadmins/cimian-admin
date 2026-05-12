@@ -146,11 +146,10 @@ public sealed partial class ContextualChipList : UserControl
         // Drag handle — visual affordance for reorder. The actual drag is handled by the
         // outer ListView via CanReorderItems / CanDragItems, but we surface the grip so
         // users know rows are reorderable.
-        var dragHandle = new BitmapIcon
+        var dragHandle = new FontIcon
         {
-            Width = 12, Height = 12,
-            UriSource = new Uri("ms-appx:///Assets/grip-vertical.svg"),
-            ShowAsMonochrome = true,
+            FontSize = 12,
+            Glyph = "",
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 4, 0),
@@ -176,7 +175,7 @@ public sealed partial class ContextualChipList : UserControl
 
         var remove = new Button
         {
-            Content = new BitmapIcon { Width = 10, Height = 10, UriSource = new Uri("ms-appx:///Assets/x.svg"), ShowAsMonochrome = true },
+            Content = new FontIcon { FontSize = 10, Glyph = "" },
             Padding = new Thickness(4),
             MinWidth = 22,
             MinHeight = 22,

@@ -16,8 +16,11 @@
                 Padding="32,24,32,24"
                 MaxWidth="420">
             <StackPanel Spacing="12" HorizontalAlignment="Center">
-                <BitmapIcon Width="32" Height="32"
-                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" UriSource="ms-appx:///Assets/list-checks.svg" ShowAsMonochrome="True" />
+                <Viewbox Width="32" Height="32">
+                    <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                          Stroke="{ThemeResource TextFillColorTertiaryBrush}"
+                          Data="M3,17 L5,19 L9,15 M3,7 L5,9 L9,5 M13,6 H21 M13,12 H21 M13,18 H21" />
+                </Viewbox>
                 <TextBlock Text="Select a manifest to view or edit its details."
                            Style="{StaticResource BodyTextBlockStyle}"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -66,7 +69,9 @@
                                VerticalAlignment="Center" />
                     <Button x:Name="DeleteButton" Click="OnDeleteClicked">
                         <Button.Content>
-                            <BitmapIcon Width="14" Height="14" UriSource="ms-appx:///Assets/trash-2.svg" ShowAsMonochrome="True" />
+                            <Viewbox Width="14" Height="14">
+                                <Path Width="24" Height="24" Style="{StaticResource LucidePath}" Data="M3,6 H21 M19,6 V20 A2,2 0 0 1 17,22 H7 A2,2 0 0 1 5,20 V6 M8,6 V4 A2,2 0 0 1 10,2 H14 A2,2 0 0 1 16,4 V6 M10,11 V17 M14,11 V17" />
+                            </Viewbox>
                         </Button.Content>
                         <ToolTipService.ToolTip>
                             <TextBlock Text="Delete this manifest" />

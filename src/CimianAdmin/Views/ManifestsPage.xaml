@@ -67,11 +67,18 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <BitmapIcon
-                                    Grid.Column="0"
-                                    Width="14" Height="14"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    VerticalAlignment="Center" UriSource="{x:Bind local:ManifestsPage.NodeIconUri(HasManifest)}" ShowAsMonochrome="True" />
+                                <Grid Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center">
+                                    <Viewbox Visibility="{x:Bind local:ManifestsPage.VisIfManifest(HasManifest)}">
+                                        <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                                              Stroke="{ThemeResource TextFillColorSecondaryBrush}"
+                                              Data="M15,2 H6 A2,2 0 0 0 4,4 V20 A2,2 0 0 0 6,22 H18 A2,2 0 0 0 20,20 V7 Z M14,2 V6 A2,2 0 0 0 16,8 H20 M10,9 H8 M16,13 H8 M16,17 H8" />
+                                    </Viewbox>
+                                    <Viewbox Visibility="{x:Bind local:ManifestsPage.VisIfFolder(HasManifest)}">
+                                        <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                                              Stroke="{ThemeResource TextFillColorSecondaryBrush}"
+                                              Data="M20,20 A2,2 0 0 0 22,18 V8 A2,2 0 0 0 20,6 H12.1 A2,2 0 0 1 10.41,5.1 L9.6,3.9 A2,2 0 0 0 7.93,3 H4 A2,2 0 0 0 2,5 V18 A2,2 0 0 0 4,20 Z" />
+                                    </Viewbox>
+                                </Grid>
                                 <TextBlock
                                     Grid.Column="1"
                                     Text="{x:Bind Name}"

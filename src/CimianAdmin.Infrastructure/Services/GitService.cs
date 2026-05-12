@@ -109,6 +109,41 @@ public sealed class GitService : IGitService
         return Task.Run(() => CheckoutBranchCore(info, branchName), cancellationToken);
     }
 
+    public Task<IReadOnlyList<GitCommit>> GetHistoryAsync(GitRepositoryInfo info, int limit = 200, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run<IReadOnlyList<GitCommit>>(() => GetHistoryCore(info, limit), cancellationToken);
+    }
+
+    public Task<string> GetCommitDiffAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        return Task.Run(() => GetCommitDiffCore(info, sha), cancellationToken);
+    }
+
+    public Task<GitFetchResult> FetchAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var (code, output) = RunGitStreaming(info.GitRoot, ["fetch", "--all", "--prune", "--progress"], progress);
+            return new GitFetchResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitPullResult> PullAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            // --rebase + --autostash is the user's preferred default: keeps history
+            // linear and survives a dirty working tree without manual stash gymnastics.
+            var (code, output) = RunGitStreaming(info.GitRoot, ["pull", "--rebase", "--autostash", "--progress"], progress);
+            return new GitPullResult(code == 0, output);
+        }, cancellationToken);
+    }
+
     private static GitRepositoryInfo? DiscoverCore(string deploymentRoot)
     {
         if (string.IsNullOrWhiteSpace(deploymentRoot) || !Directory.Exists(deploymentRoot))
@@ -378,6 +413,57 @@ public sealed class GitService : IGitService
         catch (IOException)
         {
             return false;
+        }
+    }
+
+    private static string GetCommitDiffCore(GitRepositoryInfo info, string sha)
+    {
+        try
+        {
+            using var repo = new Repository(info.GitRoot);
+            var commit = repo.Lookup<Commit>(sha);
+            if (commit is null)
+            {
+                return string.Empty;
+            }
+
+            // Root commits have no parent — diff against the empty tree so the entire
+            // commit shows as additions, matching what `git show <root-sha>` does.
+            var parentTree = commit.Parents.FirstOrDefault()?.Tree;
+            var patch = parentTree is null
+                ? repo.Diff.Compare<Patch>(null, commit.Tree, new CompareOptions { ContextLines = 3 })
+                : repo.Diff.Compare<Patch>(parentTree, commit.Tree, new CompareOptions { ContextLines = 3 });
+            return patch.Content;
+        }
+        catch (LibGit2SharpException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static List<GitCommit> GetHistoryCore(GitRepositoryInfo info, int limit)
+    {
+        if (limit <= 0)
+        {
+            return [];
+        }
+
+        try
+        {
+            using var repo = new Repository(info.GitRoot);
+            return [.. repo.Commits
+                .QueryBy(new CommitFilter { SortBy = CommitSortStrategies.Time })
+                .Take(limit)
+                .Select(c => new GitCommit(
+                    Sha: c.Sha[..12],
+                    Subject: (c.MessageShort ?? c.Message ?? string.Empty).TrimEnd('\r', '\n'),
+                    AuthorName: c.Author?.Name ?? string.Empty,
+                    AuthorEmail: c.Author?.Email ?? string.Empty,
+                    When: c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue))];
+        }
+        catch (LibGit2SharpException)
+        {
+            return [];
         }
     }
 

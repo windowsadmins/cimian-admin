@@ -86,6 +86,34 @@ public interface IGitService
     /// conflict with the target branch.
     /// </summary>
     Task<GitCheckoutResult> CheckoutBranchAsync(GitRepositoryInfo info, string branchName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Walks the commit history of the current branch, returning the most recent
+    /// <paramref name="limit"/> commits (oldest dropped first). Returns an empty list
+    /// when the repo has no commits yet.
+    /// </summary>
+    Task<IReadOnlyList<GitCommit>> GetHistoryAsync(GitRepositoryInfo info, int limit = 200, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the unified-diff text for a commit (diff against its first parent;
+    /// for root commits, diff against the empty tree). Concatenates per-file diffs
+    /// with standard <c>diff --git</c> headers so the Git page can highlight the same
+    /// way as working-tree diffs.
+    /// </summary>
+    Task<string> GetCommitDiffAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs <c>git fetch</c> for the configured remote (default <c>origin</c>).
+    /// Shells out so credential manager + progress output match the CLI.
+    /// </summary>
+    Task<GitFetchResult> FetchAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs <c>git pull --rebase --autostash</c>. Rebase + autostash is the default
+    /// because it keeps history linear and survives a dirty working tree without
+    /// needing the user to stage or stash by hand.
+    /// </summary>
+    Task<GitPullResult> PullAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Outcome of <see cref="IGitService.CommitAsync"/>.</summary>
@@ -104,6 +132,20 @@ public sealed record GitPushResult(bool Success, string Output);
 /// <param name="IsCurrent">True if this branch is currently checked out.</param>
 /// <param name="TipSha">First 12 chars of the branch tip commit, or null if unknown.</param>
 public sealed record GitBranch(string Name, bool IsCurrent, string? TipSha);
+
+/// <summary>Outcome of <see cref="IGitService.FetchAsync"/>.</summary>
+public sealed record GitFetchResult(bool Success, string Output);
+
+/// <summary>Outcome of <see cref="IGitService.PullAsync"/>.</summary>
+public sealed record GitPullResult(bool Success, string Output);
+
+/// <summary>One commit entry from the history walk.</summary>
+/// <param name="Sha">First 12 chars of the commit hash.</param>
+/// <param name="Subject">First line of the commit message.</param>
+/// <param name="AuthorName">Author display name.</param>
+/// <param name="AuthorEmail">Author email.</param>
+/// <param name="When">Author timestamp.</param>
+public sealed record GitCommit(string Sha, string Subject, string AuthorName, string AuthorEmail, DateTimeOffset When);
 
 /// <summary>Outcome of <see cref="IGitService.CheckoutBranchAsync"/>.</summary>
 public sealed record GitCheckoutResult(bool Success, string? ErrorMessage);

@@ -21,51 +21,67 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header: branch picker + scope + refresh -->
-        <Grid Grid.Row="0" ColumnSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Spacing="6">
-                <TextBlock Text="Git"
-                           Style="{StaticResource TitleLargeTextBlockStyle}" />
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <BitmapIcon Height="16" Width="16"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               VerticalAlignment="Center" UriSource="ms-appx:///Assets/git-branch.svg" ShowAsMonochrome="True" />
-                    <TextBlock Text="Branch:" VerticalAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <ComboBox x:Name="BranchPicker"
-                              MinWidth="220"
-                              SelectionChanged="OnBranchSelectionChanged" />
+        <!-- Header: title + (branch picker, ahead/behind chip, Fetch/Pull/Help) on one row. -->
+        <StackPanel Grid.Row="0" Spacing="6">
+            <TextBlock Text="Git"
+                       Style="{StaticResource TitleLargeTextBlockStyle}" />
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Viewbox Width="16" Height="16" VerticalAlignment="Center">
+                    <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                          Stroke="{ThemeResource TextFillColorSecondaryBrush}"
+                          Data="M6,3 V15 M15,6 A3,3 0 1 0 21,6 A3,3 0 1 0 15,6 Z M3,18 A3,3 0 1 0 9,18 A3,3 0 1 0 3,18 Z M18,9 A9,9 0 0 1 9,18" />
+                </Viewbox>
+                <TextBlock Text="Branch:" VerticalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <ComboBox x:Name="BranchPicker"
+                          MinWidth="220"
+                          SelectionChanged="OnBranchSelectionChanged" />
+                <!-- Ahead/behind status rendered as a chip-shaped Border to match the
+                     title-bar GitIndicator styling. Becomes visible only when there's
+                     something to report. -->
+                <Border x:Name="AheadBehindChip"
+                        Visibility="Collapsed"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10,3,10,3"
+                        VerticalAlignment="Center">
                     <TextBlock x:Name="AheadBehindText"
-                               VerticalAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
-                <TextBlock x:Name="ScopeLine"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                               VerticalAlignment="Center" />
+                </Border>
+                <Button x:Name="FetchButton" Content="Fetch" Click="OnFetchClicked" Margin="6,0,0,0">
+                    <ToolTipService.ToolTip>
+                        <TextBlock Text="git fetch --all --prune" />
+                    </ToolTipService.ToolTip>
+                </Button>
+                <Button x:Name="PullButton" Content="Pull" Click="OnPullClicked">
+                    <ToolTipService.ToolTip>
+                        <TextBlock Text="git pull --rebase --autostash" />
+                    </ToolTipService.ToolTip>
+                </Button>
                 <Button x:Name="HelpButton" Click="OnHelpClicked" Width="36">
                     <Button.Content>
-                        <BitmapIcon Width="14" Height="14" UriSource="ms-appx:///Assets/circle-help.svg" ShowAsMonochrome="True" />
+                        <Viewbox Width="14" Height="14">
+                            <Path Width="24" Height="24" Style="{StaticResource LucidePath}" Data="M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z M9.09,9 A3,3 0 0 1 14.92,10 C14.92,12 11.92,13 11.92,13 M12,17 L12.01,17" />
+                        </Viewbox>
                     </Button.Content>
                     <ToolTipService.ToolTip>
                         <TextBlock Text="Keyboard shortcuts (?)" />
                     </ToolTipService.ToolTip>
                 </Button>
-                <Button x:Name="RefreshButton" Content="Refresh" Click="OnRefreshClicked">
-                    <ToolTipService.ToolTip>
-                        <TextBlock Text="Refresh (r or F5)" />
-                    </ToolTipService.ToolTip>
-                </Button>
             </StackPanel>
-        </Grid>
+            <TextBlock x:Name="ScopeLine"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+        </StackPanel>
 
-        <!-- Two-pane body: changes list + draggable splitter + diff -->
-        <Grid Grid.Row="1" x:Name="BodyGrid">
+        <!-- Pivot wraps body: Changes (current two-pane editor) + History (commit log). -->
+        <Pivot Grid.Row="1" x:Name="BodyPivot" SelectionChanged="OnPivotSelectionChanged">
+            <PivotItem Header="Changes" Margin="0,16,0,0">
+        <Grid x:Name="BodyGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*" MinWidth="240" />
                 <ColumnDefinition Width="Auto" />
@@ -74,54 +90,14 @@
 
             <Grid Grid.Column="0" RowSpacing="10">
                 <Grid.RowDefinitions>
+                    <!-- Composer first: write the commit message before picking files. -->
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10" MinHeight="36" VerticalAlignment="Center">
-                    <TextBlock x:Name="ChangesHeader"
-                               Style="{StaticResource BodyStrongTextBlockStyle}"
-                               VerticalAlignment="Center" />
-                    <Button x:Name="SelectAllButton" Content="Select all" Click="OnSelectAllClicked">
-                        <ToolTipService.ToolTip>
-                            <TextBlock Text="Toggle all (a) — Ctrl+A also" />
-                        </ToolTipService.ToolTip>
-                    </Button>
-                    <Button x:Name="SelectNoneButton" Content="Clear" Click="OnSelectNoneClicked">
-                        <ToolTipService.ToolTip>
-                            <TextBlock Text="Clear selection (Ctrl+Shift+A)" />
-                        </ToolTipService.ToolTip>
-                    </Button>
-                </StackPanel>
-
-                <Border Grid.Row="1"
-                        Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16">
-                    <Grid>
-                        <ListView x:Name="ChangesList"
-                                  SelectionMode="Single"
-                                  IsItemClickEnabled="True"
-                                  ItemClick="OnChangeItemClicked"
-                                  SelectionChanged="OnChangeSelectionChanged"
-                                  KeyDown="OnChangesListKeyDown"
-                                  Padding="6" />
-                        <TextBlock x:Name="EmptyState"
-                                   Text="Working tree clean — no changes to commit."
-                                   Visibility="Collapsed"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                        <TextBlock x:Name="NoGitState"
-                                   Text="No git repository detected for this Cimian deployment."
-                                   Visibility="Collapsed"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                    </Grid>
-                </Border>
-
-                <StackPanel Grid.Row="2" Spacing="6">
+                <StackPanel Grid.Row="0" Spacing="6">
                     <TextBlock Text="Subject (≤72 chars recommended)"
                                Style="{StaticResource CaptionTextBlockStyle}" />
                     <TextBox x:Name="SubjectBox"
@@ -138,7 +114,7 @@
                              MaxHeight="140" />
                 </StackPanel>
 
-                <Grid Grid.Row="3" ColumnSpacing="12">
+                <Grid Grid.Row="1" ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -149,9 +125,11 @@
                                 Spacing="6"
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Left">
-                        <BitmapIcon Width="12" Height="12"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   VerticalAlignment="Center" UriSource="ms-appx:///Assets/user.svg" ShowAsMonochrome="True" />
+                        <Viewbox Width="12" Height="12" VerticalAlignment="Center">
+                            <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                                  Stroke="{ThemeResource TextFillColorSecondaryBrush}"
+                                  Data="M19,21 V19 A4,4 0 0 0 15,15 H9 A4,4 0 0 0 5,19 V21 M8,7 A4,4 0 1 0 16,7 A4,4 0 1 0 8,7 Z" />
+                        </Viewbox>
                         <!-- Click the name/email to open the identity editor — no
                              separate Edit button. HyperlinkButton renders as a flat
                              text link styled like the surrounding caption. -->
@@ -189,7 +167,9 @@
                                 IsEnabled="False"
                                 Width="36">
                             <Button.Content>
-                                <BitmapIcon Width="14" Height="14" UriSource="ms-appx:///Assets/more-horizontal.svg" ShowAsMonochrome="True" />
+                                <Viewbox Width="14" Height="14">
+                                    <Path Width="24" Height="24" Style="{StaticResource LucidePath}" Data="M4,12 A1,1 0 1 0 6,12 A1,1 0 1 0 4,12 Z M11,12 A1,1 0 1 0 13,12 A1,1 0 1 0 11,12 Z M18,12 A1,1 0 1 0 20,12 A1,1 0 1 0 18,12 Z" />
+                                </Viewbox>
                             </Button.Content>
                             <ToolTipService.ToolTip>
                                 <TextBlock Text="More commit options" />
@@ -204,6 +184,47 @@
                         </Button>
                     </StackPanel>
                 </Grid>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" MinHeight="36" VerticalAlignment="Center" Margin="0,4,0,0">
+                    <TextBlock x:Name="ChangesHeader"
+                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                               VerticalAlignment="Center" />
+                    <Button x:Name="SelectAllButton" Content="Select all" Click="OnSelectAllClicked">
+                        <ToolTipService.ToolTip>
+                            <TextBlock Text="Toggle all (a) — Ctrl+A also" />
+                        </ToolTipService.ToolTip>
+                    </Button>
+                    <Button x:Name="SelectNoneButton" Content="Clear" Click="OnSelectNoneClicked">
+                        <ToolTipService.ToolTip>
+                            <TextBlock Text="Clear selection (Ctrl+Shift+A)" />
+                        </ToolTipService.ToolTip>
+                    </Button>
+                </StackPanel>
+
+                <Border Grid.Row="3"
+                        Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16">
+                    <Grid>
+                        <ListView x:Name="ChangesList"
+                                  SelectionMode="Single"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="OnChangeItemClicked"
+                                  SelectionChanged="OnChangeSelectionChanged"
+                                  KeyDown="OnChangesListKeyDown"
+                                  Padding="6" />
+                        <TextBlock x:Name="EmptyState"
+                                   Text="Working tree clean — no changes to commit."
+                                   Visibility="Collapsed"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        <TextBlock x:Name="NoGitState"
+                                   Text="No git repository detected for this Cimian deployment."
+                                   Visibility="Collapsed"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                    </Grid>
+                </Border>
             </Grid>
 
             <controls:GridSplitter Grid.Column="1"
@@ -218,7 +239,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" ColumnSpacing="8" MinHeight="36">
+                <Grid Grid.Row="0" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -226,7 +247,7 @@
                     <TextBlock Grid.Column="0"
                                x:Name="DiffHeader"
                                Text="Diff"
-                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                               Style="{StaticResource CaptionTextBlockStyle}"
                                TextTrimming="CharacterEllipsis"
                                VerticalAlignment="Center" />
                     <HyperlinkButton Grid.Column="1"
@@ -264,6 +285,104 @@
                 </Border>
             </Grid>
         </Grid>
+            </PivotItem>
+
+            <PivotItem Header="History" Margin="0,16,0,0">
+                <!-- Two-pane: commit list on the left, selected commit's diff on the right. -->
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="320" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="320" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16">
+                        <Grid>
+                            <ListView x:Name="HistoryList"
+                                      SelectionMode="Single"
+                                      SelectionChanged="OnHistorySelectionChanged"
+                                      Padding="0,4,0,4">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Padding="6,6,6,6" ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Sha}"
+                                                       FontFamily="Cascadia Mono, Consolas"
+                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Subject}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding AuthorName}"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,8,0" />
+                                            <TextBlock Grid.Column="3"
+                                                       Text="{Binding WhenDisplay}"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <TextBlock x:Name="HistoryEmpty"
+                                       Text="No commits yet on this branch."
+                                       Visibility="Collapsed"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            <ProgressRing x:Name="HistoryLoading"
+                                          IsActive="False"
+                                          Width="32"
+                                          Height="32" />
+                        </Grid>
+                    </Border>
+
+                    <controls:GridSplitter Grid.Column="1"
+                                           Width="6"
+                                           Background="Transparent"
+                                           ResizeBehavior="PreviousAndNext"
+                                           ResizeDirection="Columns" />
+
+                    <Border Grid.Column="2"
+                            Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16">
+                        <Grid>
+                            <ScrollViewer x:Name="HistoryDiffScroller"
+                                          HorizontalScrollMode="Enabled"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto"
+                                          Padding="10">
+                                <TextBlock x:Name="HistoryDiffText"
+                                           FontFamily="Cascadia Mono, Consolas"
+                                           FontSize="12"
+                                           TextWrapping="NoWrap"
+                                           IsTextSelectionEnabled="True" />
+                            </ScrollViewer>
+                            <TextBlock x:Name="HistoryDiffPlaceholder"
+                                       Text="Select a commit to see its diff."
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            <ProgressRing x:Name="HistoryDiffLoading"
+                                          IsActive="False"
+                                          Width="32"
+                                          Height="32" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </PivotItem>
+        </Pivot>
 
         <Grid Grid.Row="2">
             <InfoBar x:Name="ResultBar"

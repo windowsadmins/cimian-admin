@@ -75,7 +75,8 @@ public sealed partial class CatalogsPage : Page
         !string.IsNullOrEmpty(haystack)
         && haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
 
-    // Mirrors PackagesViewModel.BuildTree: group by Category, "(Uncategorized)" last.
+    // Group by Category, then collapse same-named packages under a single
+    // expandable parent that lists each version as a child.
     private static List<PackageTreeNode> BuildCategoryTree(IEnumerable<Package> packages)
     {
         const string uncategorized = "(Uncategorized)";
@@ -104,13 +105,40 @@ public sealed partial class CatalogsPage : Page
                 Name = category,
                 IsExpanded = true,
             };
-            foreach (var pkg in bucket.OrderBy(p => p.EffectiveDisplayName, StringComparer.OrdinalIgnoreCase))
+
+            // Group same-name entries under one parent. Single-version names
+            // stay flat as a leaf; multi-version names get a folder-like group.
+            var byDisplayName = bucket
+                .GroupBy(p => p.EffectiveDisplayName, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var nameGroup in byDisplayName)
             {
-                node.Children.Add(new PackageTreeNode
+                var versions = nameGroup.ToList();
+                if (versions.Count == 1)
                 {
-                    Name = pkg.EffectiveDisplayName,
-                    Package = pkg,
-                });
+                    node.Children.Add(new PackageTreeNode
+                    {
+                        Name = nameGroup.Key,
+                        Package = versions[0],
+                    });
+                    continue;
+                }
+
+                var parent = new PackageTreeNode
+                {
+                    Name = $"{nameGroup.Key} ({versions.Count} versions)",
+                    IsExpanded = false,
+                };
+                foreach (var pkg in versions.OrderByDescending(p => p.Version, StringComparer.OrdinalIgnoreCase))
+                {
+                    parent.Children.Add(new PackageTreeNode
+                    {
+                        Name = pkg.Version ?? string.Empty,
+                        Package = pkg,
+                    });
+                }
+                node.Children.Add(parent);
             }
             roots.Add(node);
         }

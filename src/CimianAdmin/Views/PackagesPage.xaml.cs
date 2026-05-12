@@ -23,9 +23,13 @@ public sealed partial class PackagesPage : Page
         Unloaded += OnUnloaded;
     }
 
-    // Lucide: package for package leaves, folder for category groups.
-    public static Uri NodeIconUri(bool hasPackage) =>
-        new(hasPackage ? "ms-appx:///Assets/package.svg" : "ms-appx:///Assets/folder.svg");
+    // Tree rows use TWO inline Paths (package + folder) with Visibility toggled by
+    // these helpers — sidesteps XamlReader.Load on the hot virtualization path,
+    // which crashed during tree materialization.
+    public static Microsoft.UI.Xaml.Visibility VisIfPackage(bool hasPackage) =>
+        hasPackage ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public static Microsoft.UI.Xaml.Visibility VisIfFolder(bool hasPackage) =>
+        hasPackage ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

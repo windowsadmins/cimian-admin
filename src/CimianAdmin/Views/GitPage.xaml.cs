@@ -84,7 +84,8 @@ public sealed partial class GitPage : Page
 
         AheadBehindText.Text = _info.HasUpstream
             ? string.Create(CultureInfo.InvariantCulture, $"↑{_info.AheadCount} ↓{_info.BehindCount}")
-            : "(no upstream)";
+            : "no upstream";
+        AheadBehindChip.Visibility = Visibility.Visible;
 
         var rootName = Path.GetFileName(_info.GitRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         ScopeLine.Text = string.IsNullOrEmpty(_info.RelativeRepoPath)
@@ -327,6 +328,7 @@ public sealed partial class GitPage : Page
         _rows = [];
         _selectedRow = null;
         AheadBehindText.Text = string.Empty;
+        AheadBehindChip.Visibility = Visibility.Collapsed;
         ScopeLine.Text = string.Empty;
         BranchPicker.ItemsSource = null;
         BranchPicker.IsEnabled = false;
@@ -457,6 +459,145 @@ public sealed partial class GitPage : Page
     private async void OnRefreshClicked(object sender, RoutedEventArgs e)
     {
         await RefreshAsync().ConfigureAwait(true);
+        _historyLoaded = false;
+        if (BodyPivot.SelectedIndex == 1)
+        {
+            await LoadHistoryAsync().ConfigureAwait(true);
+        }
+    }
+
+    private bool _historyLoaded;
+
+    private async void OnPivotSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (BodyPivot.SelectedIndex == 1 && !_historyLoaded)
+        {
+            await LoadHistoryAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        if (_info is null)
+        {
+            HistoryList.ItemsSource = null;
+            HistoryEmpty.Visibility = Visibility.Visible;
+            return;
+        }
+
+        HistoryLoading.IsActive = true;
+        HistoryEmpty.Visibility = Visibility.Collapsed;
+        try
+        {
+            var commits = await _gitService.GetHistoryAsync(_info, 200).ConfigureAwait(true);
+            var rows = commits.Select(c => new HistoryRow(c)).ToList();
+            HistoryList.ItemsSource = rows;
+            HistoryEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            _historyLoaded = true;
+        }
+        finally
+        {
+            HistoryLoading.IsActive = false;
+        }
+    }
+
+    private async void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListView lv || lv.SelectedItem is not HistoryRow row || _info is null)
+        {
+            HistoryDiffText.Inlines.Clear();
+            HistoryDiffPlaceholder.Visibility = Visibility.Visible;
+            return;
+        }
+
+        HistoryDiffPlaceholder.Visibility = Visibility.Collapsed;
+        HistoryDiffLoading.IsActive = true;
+        HistoryDiffText.Inlines.Clear();
+        try
+        {
+            var diff = await _gitService.GetCommitDiffAsync(_info, row.Sha).ConfigureAwait(true);
+            if (string.IsNullOrEmpty(diff))
+            {
+                HistoryDiffText.Inlines.Add(new Run
+                {
+                    Text = "(no diff — root commit or merge)",
+                    Foreground = new SolidColorBrush(MutedColor),
+                });
+            }
+            else
+            {
+                RenderColorizedDiff(diff, HistoryDiffText);
+            }
+        }
+        catch (Exception ex)
+        {
+            HistoryDiffText.Inlines.Add(new Run
+            {
+                Text = $"(failed to compute diff: {ex.Message})",
+                Foreground = new SolidColorBrush(MutedColor),
+            });
+        }
+        finally
+        {
+            HistoryDiffLoading.IsActive = false;
+        }
+    }
+
+    private async void OnFetchClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null) return;
+        var progress = ShowProgress("Fetching from remote…");
+        try
+        {
+            var result = await _gitService.FetchAsync(_info, progress).ConfigureAwait(true);
+            if (result.Success) ShowSuccess("Fetch complete.");
+            else ShowError("Fetch failed", result.Output);
+        }
+        catch (Exception ex)
+        {
+            ShowError("Fetch failed", ex.Message);
+        }
+        finally
+        {
+            HideProgress();
+            await RefreshAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async void OnPullClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null) return;
+        var progress = ShowProgress("Pulling (rebase + autostash)…");
+        try
+        {
+            var result = await _gitService.PullAsync(_info, progress).ConfigureAwait(true);
+            if (result.Success) ShowSuccess("Pull complete.");
+            else ShowError("Pull failed", result.Output);
+        }
+        catch (Exception ex)
+        {
+            ShowError("Pull failed", ex.Message);
+        }
+        finally
+        {
+            HideProgress();
+            _historyLoaded = false;
+            await RefreshAsync().ConfigureAwait(true);
+            if (BodyPivot.SelectedIndex == 1)
+            {
+                await LoadHistoryAsync().ConfigureAwait(true);
+            }
+        }
+    }
+
+    // Wraps GitCommit to surface a friendly WhenDisplay for binding without a converter.
+    private sealed class HistoryRow(GitCommit commit)
+    {
+        public string Sha => commit.Sha;
+        public string Subject => commit.Subject;
+        public string AuthorName => commit.AuthorName;
+        public string AuthorEmail => commit.AuthorEmail;
+        public string WhenDisplay => commit.When.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
     }
 
     private void OnChangeSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -510,18 +651,21 @@ public sealed partial class GitPage : Page
         RenderColorizedDiff(diff);
     }
 
-    private void RenderColorizedDiff(string diff)
+    private void RenderColorizedDiff(string diff) => RenderColorizedDiff(diff, DiffText);
+
+    private void RenderColorizedDiff(string diff, TextBlock target)
     {
+        target.Inlines.Clear();
         foreach (var rawLine in diff.Split('\n'))
         {
             var line = rawLine.TrimEnd('\r');
             var color = LineColor(line);
-            DiffText.Inlines.Add(new Run
+            target.Inlines.Add(new Run
             {
                 Text = line.Length == 0 ? " " : line,
                 Foreground = new SolidColorBrush(color),
             });
-            DiffText.Inlines.Add(new LineBreak());
+            target.Inlines.Add(new LineBreak());
         }
     }
 
@@ -740,6 +884,11 @@ public sealed partial class GitPage : Page
     private async Task RefreshAfterCommitAsync()
     {
         await RefreshAsync().ConfigureAwait(true);
+        _historyLoaded = false;
+        if (BodyPivot.SelectedIndex == 1)
+        {
+            await LoadHistoryAsync().ConfigureAwait(true);
+        }
         if (App.MainWindowInstance is { } window)
         {
             await window.RefreshGitIndicatorAsync(_repositoryService.CurrentRepository).ConfigureAwait(true);

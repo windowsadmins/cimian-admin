@@ -2,7 +2,8 @@
 <Application
     x:Class="CimianAdmin.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:shapes="using:Microsoft.UI.Xaml.Shapes">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -20,16 +21,24 @@
                 <Setter Property="CornerRadius" Value="8" />
             </Style>
 
-            <!-- Icons across the app use BitmapIcon with ShowAsMonochrome="True"
-                 because ImageIcon.Foreground does NOT recolor SvgImageSource — that
-                 was the cause of "black-on-black" icons in dark mode. BitmapIcon
-                 rasterizes the SVG and recolors non-transparent pixels to Foreground.
-                 Default Foreground (when not overridden) is ButtonForeground /
-                 NavigationViewItemForeground from the system theme. -->
-            <Style TargetType="BitmapIcon">
-                <Setter Property="ShowAsMonochrome" Value="True" />
-                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+            <!-- Lucide icon system: rendered as Path with theme-aware Stroke.
+                 Path data strings are stored as x:String resources; sites place a
+                 <Viewbox Width="N" Height="N"><Path Style="{StaticResource LucidePath}"
+                 Data="{StaticResource LucideXxx}" Width="24" Height="24"/></Viewbox>.
+                 ThemeResource for Stroke updates automatically with theme switches.
+
+                 The 5 NavigationViewItem.Icon slots in MainWindow.xaml stay on FontIcon
+                 (Segoe Fluent Icons) because IconElement is not user-derivable in WinUI 3
+                 and PathIcon fills geometry rather than stroking it. -->
+            <Style x:Key="LucidePath" TargetType="shapes:Path">
+                <Setter Property="Stroke" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                <Setter Property="StrokeThickness" Value="2" />
+                <Setter Property="StrokeStartLineCap" Value="Round" />
+                <Setter Property="StrokeEndLineCap" Value="Round" />
+                <Setter Property="StrokeLineJoin" Value="Round" />
+                <Setter Property="Fill" Value="Transparent" />
             </Style>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>

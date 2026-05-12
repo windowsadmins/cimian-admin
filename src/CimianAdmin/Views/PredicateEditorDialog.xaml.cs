@@ -14,6 +14,10 @@ public sealed partial class PredicateEditorDialog : ContentDialog
 {
     private PredicateBuilder _builder = new();
     private bool _suppressEvents;
+    // Tracks user edits in the Custom tab. Once dirty, switching Builder→Custom no
+    // longer overwrites the user's text — they keep whatever they typed.
+    private bool _customDirty;
+    private bool _suppressCustomDirty;
 
     /// <summary>The final predicate string, available after <c>ShowAsync()</c>.</summary>
     public string Predicate { get; private set; } = string.Empty;
@@ -29,7 +33,12 @@ public sealed partial class PredicateEditorDialog : ContentDialog
         else
         {
             _builder = new PredicateBuilder();
-            CustomTextBox.Text = initial ?? string.Empty;
+            // Seed the initial text without marking it as a user edit — that way
+            // an unparseable initial value lands in Custom but the dirty flag stays
+            // false (so switching to Builder and back can still auto-sync if no edits).
+            _suppressCustomDirty = true;
+            try { CustomTextBox.Text = initial ?? string.Empty; }
+            finally { _suppressCustomDirty = false; }
             ShowCustomTab(force: !string.IsNullOrWhiteSpace(initial));
         }
 
@@ -75,11 +84,27 @@ public sealed partial class PredicateEditorDialog : ContentDialog
         PredicateTab.Visibility = Visibility.Collapsed;
         CustomTab.Visibility = Visibility.Visible;
 
-        // Sync from Predicate → Custom by emitting the canonical string.
-        if (!force)
+        // Sync Predicate → Custom only when the user hasn't manually edited the
+        // custom text. `force` is used during ctor to seat an unparseable initial
+        // value verbatim without it being treated as a dirty edit.
+        if (!force && !_customDirty)
         {
-            CustomTextBox.Text = PredicateSerializer.ToPredicateString(_builder);
+            _suppressCustomDirty = true;
+            try
+            {
+                CustomTextBox.Text = PredicateSerializer.ToPredicateString(_builder);
+            }
+            finally
+            {
+                _suppressCustomDirty = false;
+            }
         }
+    }
+
+    private void OnCustomTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suppressCustomDirty) return;
+        _customDirty = true;
     }
 
     private void OnCompoundChanged(object sender, SelectionChangedEventArgs e)

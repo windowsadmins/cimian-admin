@@ -73,6 +73,7 @@
                          TextWrapping="Wrap"
                          FontFamily="Cascadia Mono, Consolas"
                          BorderThickness="0"
+                         TextChanged="OnCustomTextChanged"
                          PlaceholderText="hostname == 'MAC-123' AND os_vers_major >= 11" />
             </Border>
         </Grid>

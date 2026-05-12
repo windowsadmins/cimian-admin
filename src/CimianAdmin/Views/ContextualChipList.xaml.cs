@@ -2,7 +2,6 @@ namespace CimianAdmin.Views;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
 
 /// <summary>
 /// Chip list where each chip carries a "context" — top-level vs. one of the manifest's

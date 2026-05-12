@@ -130,7 +130,10 @@ public sealed partial class CatalogsPage : Page
                     Name = $"{nameGroup.Key} ({versions.Count} versions)",
                     IsExpanded = false,
                 };
-                foreach (var pkg in versions.OrderByDescending(p => p.Version, StringComparer.OrdinalIgnoreCase))
+                // Version-aware sort: compare numeric segments numerically (so "10" > "9"),
+                // falling back to ordinal compare on any non-numeric tail. Cimian versions
+                // look like "2026.05.11.0458" or "1.2.3" so dotted-numeric is the common case.
+                foreach (var pkg in versions.OrderByDescending(p => p.Version, VersionComparer.Instance))
                 {
                     parent.Children.Add(new PackageTreeNode
                     {
@@ -210,6 +213,42 @@ public sealed partial class CatalogsPage : Page
             && App.MainWindowInstance is { } window)
         {
             window.NavigateToPackage(package);
+        }
+    }
+
+    /// <summary>
+    /// Compares dotted-numeric version strings segment-by-segment. "10" beats "9",
+    /// "2026.05.11" beats "2026.05.09", and non-numeric tails fall back to ordinal
+    /// compare. Null/empty sorts last.
+    /// </summary>
+    private sealed class VersionComparer : IComparer<string?>
+    {
+        public static readonly VersionComparer Instance = new();
+
+        public int Compare(string? a, string? b)
+        {
+            if (string.IsNullOrEmpty(a) && string.IsNullOrEmpty(b)) return 0;
+            if (string.IsNullOrEmpty(a)) return -1;
+            if (string.IsNullOrEmpty(b)) return 1;
+
+            var aParts = a.Split('.', '-');
+            var bParts = b.Split('.', '-');
+            var len = Math.Min(aParts.Length, bParts.Length);
+            for (int i = 0; i < len; i++)
+            {
+                var aNum = int.TryParse(aParts[i], out var an);
+                var bNum = int.TryParse(bParts[i], out var bn);
+                if (aNum && bNum)
+                {
+                    if (an != bn) return an.CompareTo(bn);
+                }
+                else
+                {
+                    var cmp = string.Compare(aParts[i], bParts[i], StringComparison.OrdinalIgnoreCase);
+                    if (cmp != 0) return cmp;
+                }
+            }
+            return aParts.Length.CompareTo(bParts.Length);
         }
     }
 }

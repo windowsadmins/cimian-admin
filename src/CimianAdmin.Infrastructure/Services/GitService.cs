@@ -58,8 +58,14 @@ public sealed class GitService : IGitService
         ArgumentNullException.ThrowIfNull(info);
         return Task.Run(() =>
         {
-            var name = RunGit(info.GitRoot, ["config", "--get", "user.name"]).Output.Trim();
-            var email = RunGit(info.GitRoot, ["config", "--get", "user.email"]).Output.Trim();
+            // `git config --get` exits 1 when the key is unset and writes nothing to
+            // stdout — but other failures (git missing, locked .gitconfig) also
+            // produce non-zero exits with error text in stderr. Treat any non-zero
+            // exit as "unset" so we never surface a stderr string as the user's name.
+            var nameResult = RunGit(info.GitRoot, ["config", "--get", "user.name"]);
+            var emailResult = RunGit(info.GitRoot, ["config", "--get", "user.email"]);
+            var name = nameResult.ExitCode == 0 ? nameResult.Output.Trim() : string.Empty;
+            var email = emailResult.ExitCode == 0 ? emailResult.Output.Trim() : string.Empty;
             return new GitIdentity(name, email);
         }, cancellationToken);
     }
@@ -72,8 +78,20 @@ public sealed class GitService : IGitService
         return Task.Run(() =>
         {
             var scopeFlag = scope == GitConfigScope.Global ? "--global" : "--local";
-            RunGit(info.GitRoot, ["config", scopeFlag, "user.name", name]);
-            RunGit(info.GitRoot, ["config", scopeFlag, "user.email", email]);
+            // Check each git config exit code — RunGit doesn't throw on non-zero, so
+            // without these we'd silently tell the UI "saved" when nothing wrote.
+            var nameResult = RunGit(info.GitRoot, ["config", scopeFlag, "user.name", name]);
+            if (nameResult.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"git config user.name failed (exit {nameResult.ExitCode}): {nameResult.Output}");
+            }
+            var emailResult = RunGit(info.GitRoot, ["config", scopeFlag, "user.email", email]);
+            if (emailResult.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"git config user.email failed (exit {emailResult.ExitCode}): {emailResult.Output}");
+            }
         }, cancellationToken);
     }
 

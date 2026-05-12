@@ -2,7 +2,6 @@ namespace CimianAdmin.Views;
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
 
 /// <summary>
 /// AutoSuggestBox + chip list with X-to-remove. Used for any pkginfo / manifest field

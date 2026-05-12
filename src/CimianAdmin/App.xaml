@@ -21,15 +21,15 @@
                 <Setter Property="CornerRadius" Value="8" />
             </Style>
 
-            <!-- Lucide icon system: rendered as Path with theme-aware Stroke.
-                 Path data strings are stored as x:String resources; sites place a
-                 <Viewbox Width="N" Height="N"><Path Style="{StaticResource LucidePath}"
-                 Data="{StaticResource LucideXxx}" Width="24" Height="24"/></Viewbox>.
-                 ThemeResource for Stroke updates automatically with theme switches.
+            <!-- Lucide icon system for content sites: rendered as <Path Stroke="..."/>
+                 with the LucidePath Style below; Stroke is a ThemeResource so it retints
+                 on theme switches.
 
-                 The 5 NavigationViewItem.Icon slots in MainWindow.xaml stay on FontIcon
-                 (Segoe Fluent Icons) because IconElement is not user-derivable in WinUI 3
-                 and PathIcon fills geometry rather than stroking it. -->
+                 The 5 NavigationViewItem.Icon slots in MainWindow.xaml use PathIcon with
+                 Fluent UI System Icons geometry — IconElement isn't user-derivable in
+                 WinUI 3 and PathIcon fills rather than strokes, so single-path Fluent
+                 SVGs (whose path data already traces an outline-style shape) give the
+                 right look there while still picking up Foreground from the theme. -->
             <Style x:Key="LucidePath" TargetType="shapes:Path">
                 <Setter Property="Stroke" Value="{ThemeResource TextFillColorPrimaryBrush}" />
                 <Setter Property="StrokeThickness" Value="2" />

@@ -16,12 +16,8 @@
                 Padding="32,24,32,24"
                 MaxWidth="420">
             <StackPanel Spacing="12" HorizontalAlignment="Center">
-                <ImageIcon Width="32" Height="32"
-                           Foreground="{ThemeResource TextFillColorTertiaryBrush}">
-                    <ImageIcon.Source>
-                        <SvgImageSource UriSource="ms-appx:///Assets/package.svg" />
-                    </ImageIcon.Source>
-                </ImageIcon>
+                <BitmapIcon Width="32" Height="32"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" UriSource="ms-appx:///Assets/package.svg" ShowAsMonochrome="True" />
                 <TextBlock Text="Select a package to view or edit its details."
                            Style="{StaticResource BodyTextBlockStyle}"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -70,11 +66,7 @@
                                VerticalAlignment="Center" />
                     <Button x:Name="DeleteButton" Click="OnDeleteClicked">
                         <Button.Content>
-                            <ImageIcon Width="14" Height="14">
-                                <ImageIcon.Source>
-                                    <SvgImageSource UriSource="ms-appx:///Assets/trash-2.svg" />
-                                </ImageIcon.Source>
-                            </ImageIcon>
+                            <BitmapIcon Width="14" Height="14" UriSource="ms-appx:///Assets/trash-2.svg" ShowAsMonochrome="True" />
                         </Button.Content>
                         <ToolTipService.ToolTip>
                             <TextBlock Text="Delete this pkginfo file" />

@@ -61,15 +61,11 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <ImageIcon
+                                <BitmapIcon
                                     Grid.Column="0"
                                     Width="14" Height="14"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    VerticalAlignment="Center">
-                                    <ImageIcon.Source>
-                                        <SvgImageSource UriSource="{x:Bind local:PackagesPage.NodeIconUri(HasPackage)}" />
-                                    </ImageIcon.Source>
-                                </ImageIcon>
+                                    VerticalAlignment="Center" UriSource="{x:Bind local:PackagesPage.NodeIconUri(HasPackage)}" ShowAsMonochrome="True" />
                                 <TextBlock
                                     Grid.Column="1"
                                     Text="{x:Bind Name}"

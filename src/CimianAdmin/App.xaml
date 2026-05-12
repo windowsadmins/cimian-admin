@@ -20,10 +20,14 @@
                 <Setter Property="CornerRadius" Value="8" />
             </Style>
 
-            <!-- Lucide SVGs use stroke="currentColor". An implicit Style ties every
-                 ImageIcon's foreground to the primary text brush so icons read as
-                 white on dark backgrounds and dark on light backgrounds. -->
-            <Style TargetType="ImageIcon">
+            <!-- Icons across the app use BitmapIcon with ShowAsMonochrome="True"
+                 because ImageIcon.Foreground does NOT recolor SvgImageSource — that
+                 was the cause of "black-on-black" icons in dark mode. BitmapIcon
+                 rasterizes the SVG and recolors non-transparent pixels to Foreground.
+                 Default Foreground (when not overridden) is ButtonForeground /
+                 NavigationViewItemForeground from the system theme. -->
+            <Style TargetType="BitmapIcon">
+                <Setter Property="ShowAsMonochrome" Value="True" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
             </Style>
         </ResourceDictionary>

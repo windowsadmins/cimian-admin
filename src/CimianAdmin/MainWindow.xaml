@@ -23,6 +23,8 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+            <!-- Column 3 historically held a title-bar icon; removed by user request. -->
+
 
             <Button x:Name="BackButton"
                     Grid.Column="1"
@@ -32,11 +34,7 @@
                     Width="36" Height="32"
                     Margin="0,0,2,0"
                     IsEnabled="False">
-                <ImageIcon Width="14" Height="14">
-                    <ImageIcon.Source>
-                        <SvgImageSource UriSource="ms-appx:///Assets/arrow-left.svg" />
-                    </ImageIcon.Source>
-                </ImageIcon>
+                <BitmapIcon Width="14" Height="14" UriSource="ms-appx:///Assets/arrow-left.svg" ShowAsMonochrome="True" />
                 <ToolTipService.ToolTip>
                     <TextBlock Text="Back" />
                 </ToolTipService.ToolTip>
@@ -49,25 +47,12 @@
                     Width="36" Height="32"
                     Margin="0,0,8,0"
                     IsEnabled="False">
-                <ImageIcon Width="14" Height="14">
-                    <ImageIcon.Source>
-                        <SvgImageSource UriSource="ms-appx:///Assets/arrow-right.svg" />
-                    </ImageIcon.Source>
-                </ImageIcon>
+                <BitmapIcon Width="14" Height="14" UriSource="ms-appx:///Assets/arrow-right.svg" ShowAsMonochrome="True" />
                 <ToolTipService.ToolTip>
                     <TextBlock Text="Forward" />
                 </ToolTipService.ToolTip>
             </Button>
 
-            <ImageIcon Grid.Column="3"
-                       Width="16" Height="16"
-                       VerticalAlignment="Center"
-                       Margin="0,0,8,0"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                <ImageIcon.Source>
-                    <SvgImageSource UriSource="ms-appx:///Assets/monkey.svg" />
-                </ImageIcon.Source>
-            </ImageIcon>
             <TextBlock x:Name="AppTitleText"
                        Grid.Column="4"
                        Text="CimianAdmin"
@@ -93,13 +78,9 @@
                         Padding="8,2,8,2"
                         VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <ImageIcon Height="14" Width="14"
+                        <BitmapIcon Height="14" Width="14"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   VerticalAlignment="Center">
-                            <ImageIcon.Source>
-                                <SvgImageSource UriSource="ms-appx:///Assets/git-branch.svg" />
-                            </ImageIcon.Source>
-                        </ImageIcon>
+                                   VerticalAlignment="Center" UriSource="ms-appx:///Assets/git-branch.svg" ShowAsMonochrome="True" />
                         <TextBlock x:Name="GitBranchText"
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -133,47 +114,27 @@
             <muxc:NavigationView.MenuItems>
                 <muxc:NavigationViewItem x:Name="NavRepository" Tag="repository" Content="Home">
                     <muxc:NavigationViewItem.Icon>
-                        <ImageIcon>
-                            <ImageIcon.Source>
-                                <SvgImageSource UriSource="ms-appx:///Assets/home.svg" />
-                            </ImageIcon.Source>
-                        </ImageIcon>
+                        <BitmapIcon UriSource="ms-appx:///Assets/home.svg" ShowAsMonochrome="True" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
                 <muxc:NavigationViewItem x:Name="NavPackages" Tag="packages" Content="Packages">
                     <muxc:NavigationViewItem.Icon>
-                        <ImageIcon>
-                            <ImageIcon.Source>
-                                <SvgImageSource UriSource="ms-appx:///Assets/package.svg" />
-                            </ImageIcon.Source>
-                        </ImageIcon>
+                        <BitmapIcon UriSource="ms-appx:///Assets/package.svg" ShowAsMonochrome="True" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
                 <muxc:NavigationViewItem x:Name="NavManifests" Tag="manifests" Content="Manifests">
                     <muxc:NavigationViewItem.Icon>
-                        <ImageIcon>
-                            <ImageIcon.Source>
-                                <SvgImageSource UriSource="ms-appx:///Assets/list-checks.svg" />
-                            </ImageIcon.Source>
-                        </ImageIcon>
+                        <BitmapIcon UriSource="ms-appx:///Assets/list-checks.svg" ShowAsMonochrome="True" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
                 <muxc:NavigationViewItem x:Name="NavCatalogs" Tag="catalogs" Content="Catalogs">
                     <muxc:NavigationViewItem.Icon>
-                        <ImageIcon>
-                            <ImageIcon.Source>
-                                <SvgImageSource UriSource="ms-appx:///Assets/library.svg" />
-                            </ImageIcon.Source>
-                        </ImageIcon>
+                        <BitmapIcon UriSource="ms-appx:///Assets/library.svg" ShowAsMonochrome="True" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
                 <muxc:NavigationViewItem x:Name="NavGit" Tag="git" Content="Git">
                     <muxc:NavigationViewItem.Icon>
-                        <ImageIcon>
-                            <ImageIcon.Source>
-                                <SvgImageSource UriSource="ms-appx:///Assets/git-branch.svg" />
-                            </ImageIcon.Source>
-                        </ImageIcon>
+                        <BitmapIcon UriSource="ms-appx:///Assets/git-branch.svg" ShowAsMonochrome="True" />
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>

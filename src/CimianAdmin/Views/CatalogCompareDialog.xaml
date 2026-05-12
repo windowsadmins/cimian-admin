@@ -46,15 +46,11 @@
                           PlaceholderText="select…"
                           SelectionChanged="OnSelectionChanged" />
             </StackPanel>
-            <ImageIcon Grid.Column="1"
+            <BitmapIcon Grid.Column="1"
                        Width="18" Height="18"
                        VerticalAlignment="Bottom"
                        Margin="0,0,0,8"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                <ImageIcon.Source>
-                    <SvgImageSource UriSource="ms-appx:///Assets/move-right.svg" />
-                </ImageIcon.Source>
-            </ImageIcon>
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" UriSource="ms-appx:///Assets/move-right.svg" ShowAsMonochrome="True" />
             <StackPanel Grid.Column="2" Spacing="2">
                 <TextBlock Text="Catalog B" Style="{StaticResource CaptionTextBlockStyle}" />
                 <ComboBox x:Name="CatalogBBox"

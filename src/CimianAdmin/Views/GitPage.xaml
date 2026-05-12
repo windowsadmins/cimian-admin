@@ -31,13 +31,9 @@
                 <TextBlock Text="Git"
                            Style="{StaticResource TitleLargeTextBlockStyle}" />
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <ImageIcon Height="16" Width="16"
+                    <BitmapIcon Height="16" Width="16"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               VerticalAlignment="Center">
-                        <ImageIcon.Source>
-                            <SvgImageSource UriSource="ms-appx:///Assets/git-branch.svg" />
-                        </ImageIcon.Source>
-                    </ImageIcon>
+                               VerticalAlignment="Center" UriSource="ms-appx:///Assets/git-branch.svg" ShowAsMonochrome="True" />
                     <TextBlock Text="Branch:" VerticalAlignment="Center"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <ComboBox x:Name="BranchPicker"
@@ -54,11 +50,7 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                 <Button x:Name="HelpButton" Click="OnHelpClicked" Width="36">
                     <Button.Content>
-                        <ImageIcon Width="14" Height="14">
-                            <ImageIcon.Source>
-                                <SvgImageSource UriSource="ms-appx:///Assets/circle-help.svg" />
-                            </ImageIcon.Source>
-                        </ImageIcon>
+                        <BitmapIcon Width="14" Height="14" UriSource="ms-appx:///Assets/circle-help.svg" ShowAsMonochrome="True" />
                     </Button.Content>
                     <ToolTipService.ToolTip>
                         <TextBlock Text="Keyboard shortcuts (?)" />
@@ -157,13 +149,9 @@
                                 Spacing="6"
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Left">
-                        <ImageIcon Width="12" Height="12"
+                        <BitmapIcon Width="12" Height="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   VerticalAlignment="Center">
-                            <ImageIcon.Source>
-                                <SvgImageSource UriSource="ms-appx:///Assets/user.svg" />
-                            </ImageIcon.Source>
-                        </ImageIcon>
+                                   VerticalAlignment="Center" UriSource="ms-appx:///Assets/user.svg" ShowAsMonochrome="True" />
                         <TextBlock x:Name="IdentityText"
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -198,11 +186,7 @@
                                 IsEnabled="False"
                                 Width="36">
                             <Button.Content>
-                                <ImageIcon Width="14" Height="14">
-                                    <ImageIcon.Source>
-                                        <SvgImageSource UriSource="ms-appx:///Assets/more-horizontal.svg" />
-                                    </ImageIcon.Source>
-                                </ImageIcon>
+                                <BitmapIcon Width="14" Height="14" UriSource="ms-appx:///Assets/more-horizontal.svg" ShowAsMonochrome="True" />
                             </Button.Content>
                             <ToolTipService.ToolTip>
                                 <TextBlock Text="More commit options" />

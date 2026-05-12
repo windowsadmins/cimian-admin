@@ -138,7 +138,7 @@ public sealed partial class ChipListPicker : UserControl
 
         var remove = new Button
         {
-            Content = new ImageIcon { Width = 10, Height = 10, Foreground = onAccentText, Source = new SvgImageSource(new Uri("ms-appx:///Assets/x.svg")) },
+            Content = new BitmapIcon { Width = 10, Height = 10, Foreground = onAccentText, UriSource = new Uri("ms-appx:///Assets/x.svg"), ShowAsMonochrome = true },
             Padding = new Thickness(4),
             MinWidth = 22,
             MinHeight = 22,

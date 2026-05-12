@@ -19,6 +19,13 @@
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="8" />
             </Style>
+
+            <!-- Lucide SVGs use stroke="currentColor". An implicit Style ties every
+                 ImageIcon's foreground to the primary text brush so icons read as
+                 white on dark backgrounds and dark on light backgrounds. -->
+            <Style TargetType="ImageIcon">
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

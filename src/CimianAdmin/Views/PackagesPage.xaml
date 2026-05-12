@@ -7,13 +7,17 @@
     xmlns:nodes="using:CimianAdmin.Models"
     xmlns:local="using:CimianAdmin.Views">
 
-    <Grid ColumnSpacing="0">
+    <Grid Padding="16,12,16,16" ColumnSpacing="16">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="380" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Grid Grid.Column="0" Padding="16,16,8,16" RowSpacing="10">
+        <Border Grid.Column="0"
+                Style="{StaticResource CardStyle}"
+                Shadow="{StaticResource CardShadow}"
+                Translation="0,0,16">
+        <Grid Padding="16,16,16,16" RowSpacing="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -84,11 +88,13 @@
                 </muxc:TreeView.ItemTemplate>
             </muxc:TreeView>
         </Grid>
+        </Border>
 
         <Border
             Grid.Column="1"
-            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-            BorderThickness="1,0,0,0">
+            Style="{StaticResource CardStyle}"
+            Shadow="{StaticResource CardShadow}"
+            Translation="0,0,16">
             <Grid>
                 <muxc:ProgressRing
                     IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"

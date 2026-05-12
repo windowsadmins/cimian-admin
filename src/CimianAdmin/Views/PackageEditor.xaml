@@ -92,6 +92,10 @@
             <ScrollViewer Grid.Row="1" Padding="20,0,20,20">
                 <StackPanel Spacing="24">
 
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <!-- General -->
                     <StackPanel Spacing="10">
                         <TextBlock Text="General" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -151,7 +155,12 @@
                                         Margin="0,4,0,0" />
                         </StackPanel>
                     </StackPanel>
+                    </Border>
 
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <!-- Installer (smart by type) -->
                     <StackPanel Spacing="10">
                         <TextBlock Text="Installer" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -232,7 +241,12 @@
                             </StackPanel>
                         </Grid>
                     </StackPanel>
+                    </Border>
 
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <!-- Behavior -->
                     <StackPanel Spacing="10">
                         <TextBlock Text="Behavior" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -272,7 +286,12 @@
                             </StackPanel>
                         </Grid>
                     </StackPanel>
+                    </Border>
 
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <!-- Requirements -->
                     <StackPanel Spacing="10">
                         <TextBlock Text="Requirements" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -339,7 +358,12 @@
                             </StackPanel>
                         </Grid>
                     </StackPanel>
+                    </Border>
 
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <!-- Detection (editable) -->
                     <StackPanel Spacing="10">
                         <Grid ColumnSpacing="8">
@@ -357,7 +381,12 @@
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Visibility="Collapsed" />
                     </StackPanel>
+                    </Border>
 
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <!-- Uninstaller -->
                     <StackPanel Spacing="10">
                         <TextBlock Text="Uninstaller" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -383,7 +412,12 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
+                    </Border>
 
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <!-- Scripts (50/50 layout, double height) -->
                     <StackPanel Spacing="14">
                         <TextBlock Text="Scripts" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -431,7 +465,12 @@
                                                 ScriptChanged="OnFieldChanged" />
                         </Grid>
                     </StackPanel>
+                    </Border>
 
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <!-- Trailing _metadata (read-only summary) -->
                     <StackPanel Spacing="10" x:Name="MetadataSection" Visibility="Collapsed">
                         <TextBlock Text="_metadata" Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -440,6 +479,7 @@
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
+                    </Border>
 
                 </StackPanel>
             </ScrollViewer>

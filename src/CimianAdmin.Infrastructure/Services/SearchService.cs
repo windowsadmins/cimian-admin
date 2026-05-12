@@ -19,8 +19,12 @@ public sealed class SearchService : ISearchService, IDisposable
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly Dictionary<string, CancellationTokenSource> _pendingReindex = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _watcherLock = new();
+    // Serializes Start/Stop so overlapping callers can't leave watchers attached
+    // to one root while the index is being built for another. An InitialScan
+    // in flight is cancelled via _lifetimeCts before the next Start proceeds.
+    private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
 
-    private string? _root;
+    private CancellationTokenSource? _lifetimeCts;
     private bool _isReady;
 
     public bool IsReady => _isReady;
@@ -31,21 +35,53 @@ public sealed class SearchService : ISearchService, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
 
-        await StopAsync().ConfigureAwait(false);
-        _root = repositoryRoot;
-        _isReady = false;
+        await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await StopInternalAsync().ConfigureAwait(false);
 
-        await Task.Run(() => InitialScan(repositoryRoot, cancellationToken), cancellationToken).ConfigureAwait(false);
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _lifetimeCts = cts;
+            var token = cts.Token;
+            _isReady = false;
 
-        AttachWatcher(Path.Combine(repositoryRoot, Constants.RepositoryDirectories.PkgsInfo), SearchHitKind.Package);
-        AttachWatcher(Path.Combine(repositoryRoot, Constants.RepositoryDirectories.Manifests), SearchHitKind.Manifest);
+            await Task.Run(() => InitialScan(repositoryRoot, token), token).ConfigureAwait(false);
 
-        _isReady = true;
-        ProgressChanged?.Invoke(this, new SearchIndexProgress(_index.Count, _index.Count, IsComplete: true));
+            AttachWatcher(Path.Combine(repositoryRoot, Constants.RepositoryDirectories.PkgsInfo), SearchHitKind.Package);
+            AttachWatcher(Path.Combine(repositoryRoot, Constants.RepositoryDirectories.Manifests), SearchHitKind.Manifest);
+
+            _isReady = true;
+            ProgressChanged?.Invoke(this, new SearchIndexProgress(_index.Count, _index.Count, IsComplete: true));
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
     }
 
     public async Task StopAsync()
     {
+        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await StopInternalAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    private async Task StopInternalAsync()
+    {
+        // Cancel any in-flight InitialScan or debounced re-index before we tear down state.
+        if (_lifetimeCts is { } cts)
+        {
+            await cts.CancelAsync().ConfigureAwait(false);
+            cts.Dispose();
+            _lifetimeCts = null;
+        }
+
         List<CancellationTokenSource> pending;
         lock (_watcherLock)
         {
@@ -59,13 +95,12 @@ public sealed class SearchService : ISearchService, IDisposable
             pending = [.. _pendingReindex.Values];
             _pendingReindex.Clear();
         }
-        foreach (var cts in pending)
+        foreach (var pendCts in pending)
         {
-            await cts.CancelAsync().ConfigureAwait(false);
-            cts.Dispose();
+            await pendCts.CancelAsync().ConfigureAwait(false);
+            pendCts.Dispose();
         }
         _index.Clear();
-        _root = null;
         _isReady = false;
     }
 
@@ -77,24 +112,34 @@ public sealed class SearchService : ISearchService, IDisposable
         }
 
         var needle = query.Trim().ToLowerInvariant();
-        var hits = new List<SearchHit>(maxResults);
-
-        foreach (var entry in _index.Values)
+        // Run the scan on the thread pool — IndexOf across a few MB of text is fast
+        // but the UI thread shouldn't pay for it on huge repos.
+        return Task.Run<IReadOnlyList<SearchHit>>(() =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var idx = entry.LowerText.IndexOf(needle, StringComparison.Ordinal);
-            if (idx < 0) continue;
+            var hits = new List<SearchHit>(maxResults);
+            foreach (var entry in _index.Values)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var idx = entry.LowerText.IndexOf(needle, StringComparison.Ordinal);
+                if (idx < 0) continue;
 
-            var lineNumber = FindLineNumber(entry.LowerText, idx);
-            var snippet = BuildSnippet(entry.Lines, lineNumber);
-            hits.Add(new SearchHit(entry.AbsolutePath, entry.DisplayName, entry.Kind, lineNumber, snippet));
-            if (hits.Count >= maxResults) break;
-        }
-
-        return Task.FromResult<IReadOnlyList<SearchHit>>(hits);
+                var lineNumber = FindLineNumber(entry.LowerText, idx);
+                var snippet = BuildSnippet(entry.Lines, lineNumber);
+                hits.Add(new SearchHit(entry.AbsolutePath, entry.DisplayName, entry.Kind, lineNumber, snippet));
+                if (hits.Count >= maxResults) break;
+            }
+            return hits;
+        }, cancellationToken);
     }
 
-    public void Dispose() => StopAsync().GetAwaiter().GetResult();
+    public void Dispose()
+    {
+        StopAsync().GetAwaiter().GetResult();
+        // StopAsync already disposes _lifetimeCts and clears it; this guard satisfies
+        // the analyzer in case a future Stop path leaves the field set.
+        _lifetimeCts?.Dispose();
+        _lifecycleGate.Dispose();
+    }
 
     private void InitialScan(string root, CancellationToken ct)
     {
@@ -207,6 +252,9 @@ public sealed class SearchService : ISearchService, IDisposable
                     cts.Dispose();
                 }
             }
+            // Tell listeners the index just changed so the indexing pill can briefly
+            // pulse on edits, matching the ProgressChanged contract.
+            ProgressChanged?.Invoke(this, new SearchIndexProgress(_index.Count, _index.Count, IsComplete: true));
         }, TaskScheduler.Default);
     }
 

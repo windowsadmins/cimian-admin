@@ -143,10 +143,11 @@ public sealed class Package
     /// Marked <see cref="YamlIgnoreAttribute"/> because YamlDotNet 16.3 does not bind
     /// <c>[YamlMember(Alias = "_metadata")]</c> (leading-underscore alias regression).
     /// <c>PackageService.ReadPackageAsync</c> populates this manually via
-    /// <see cref="YamlDotNet.RepresentationModel"/>.
+    /// <see cref="YamlDotNet.RepresentationModel"/>. Values can be scalars, lists or
+    /// nested mappings — anything legal under <c>_metadata:</c> in the source file.
     /// </summary>
     [YamlIgnore]
-    public Dictionary<string, string?>? Metadata { get; set; }
+    public Dictionary<string, object?>? Metadata { get; set; }
 
     // -------- repository metadata (not serialized) --------
 

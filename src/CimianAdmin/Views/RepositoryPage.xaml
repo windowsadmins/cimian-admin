@@ -103,36 +103,24 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     CornerRadius="8"
-                    Padding="20,16,20,12">
-                <StackPanel Spacing="8">
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock x:Name="GitStatusTitle"
-                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <TextBlock x:Name="GitStatusScope"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
-                        <HyperlinkButton Grid.Column="1"
-                                         x:Name="GitRefreshButton"
-                                         Content="Refresh"
-                                         Click="OnGitRefreshClicked" />
-                    </Grid>
-                    <TextBlock x:Name="GitStatusEmpty"
-                               Text="Working tree clean."
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                               Visibility="Collapsed" />
-                    <ListView x:Name="GitStatusList"
-                              SelectionMode="None"
-                              IsItemClickEnabled="True"
-                              ItemClick="OnGitStatusItemClicked"
-                              MaxHeight="260" />
-                </StackPanel>
+                    Padding="20,12,12,12">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="GitStatusTitle"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock x:Name="GitStatusScope"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <HyperlinkButton Grid.Column="1"
+                                     x:Name="OpenGitTabButton"
+                                     Content="Open Git tab"
+                                     Click="OnOpenGitTabClicked" />
+                </Grid>
             </Border>
 
             <Button

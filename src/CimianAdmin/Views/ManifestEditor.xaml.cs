@@ -184,6 +184,8 @@ public sealed partial class ManifestEditor : UserControl
             OptionalInstallsPicker.SetItems(CollectChipEntries(manifest.ConditionalItems, manifest.OptionalInstalls, c => c.OptionalInstalls));
             IncludedPicker.SetItems(CollectChipEntries(manifest.ConditionalItems, manifest.IncludedManifests, c => c.IncludedManifests));
             DefaultInstallsPicker.SetItems(manifest.DefaultInstalls);
+
+            RenderConditionsList(manifest);
         }
         finally
         {
@@ -247,47 +249,97 @@ public sealed partial class ManifestEditor : UserControl
 
     private async void OnAddConditionalClicked(object sender, RoutedEventArgs e)
     {
+        await EditConditionAsync(null).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Pops the predicate editor for either a new condition (<paramref name="target"/> = null)
+    /// or an existing one. On confirmation, the condition expression is written back to
+    /// the model and the editor is fully repopulated (so chip context dropdowns refresh).
+    /// </summary>
+    private async Task EditConditionAsync(ConditionalItem? target)
+    {
         if (_manifest is null) return;
 
-        var input = new TextBox
+        var dialog = new PredicateEditorDialog(target?.Condition)
         {
-            PlaceholderText = "e.g. catalogs == \"Production\"",
-            AcceptsReturn = false,
-            MinWidth = 360,
-        };
-        var dialog = new ContentDialog
-        {
-            Title = "New conditional",
-            Content = new StackPanel
-            {
-                Spacing = 8,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = "Condition expression",
-                        Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                    },
-                    input,
-                },
-            },
-            PrimaryButtonText = "Add",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
-
         var result = await dialog.ShowAsync();
         if (result != ContentDialogResult.Primary) return;
 
-        var expr = (input.Text ?? string.Empty).Trim();
+        var expr = (dialog.Predicate ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(expr)) return;
 
-        // Apply current edits back to the model so any chips the user has been moving don't
-        // get clobbered when we re-populate after adding the new conditional.
         ApplyEditsTo(_manifest);
         _manifest.ConditionalItems ??= [];
-        _manifest.ConditionalItems.Add(new ConditionalItem { Condition = expr });
+        if (target is null)
+        {
+            _manifest.ConditionalItems.Add(new ConditionalItem { Condition = expr });
+        }
+        else
+        {
+            target.Condition = expr;
+        }
+        Populate(_manifest);
+        IsDirty = true;
+    }
+
+    private void RenderConditionsList(Manifest manifest)
+    {
+        var items = manifest.ConditionalItems ?? [];
+        NoConditionsText.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        var rows = new List<Grid>(items.Count);
+        foreach (var c in items)
+        {
+            rows.Add(BuildConditionRow(c));
+        }
+        ConditionsList.ItemsSource = rows;
+    }
+
+    private Grid BuildConditionRow(ConditionalItem item)
+    {
+        // Edit / Delete sit on the LEFT for quick scanning; the expression flows to the
+        // right and fills the remaining width. Matches MunkiAdmin's row layout style.
+        var grid = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 2, 0, 2) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var editButton = new Button { Content = "Edit" };
+        editButton.Click += async (_, _) => await EditConditionAsync(item).ConfigureAwait(true);
+        Grid.SetColumn(editButton, 0);
+        grid.Children.Add(editButton);
+
+        var deleteButton = new Button
+        {
+            Content = new FontIcon { Glyph = "", FontSize = 14 },
+        };
+        ToolTipService.SetToolTip(deleteButton, new TextBlock { Text = "Remove condition" });
+        deleteButton.Click += (_, _) => RemoveCondition(item);
+        Grid.SetColumn(deleteButton, 1);
+        grid.Children.Add(deleteButton);
+
+        var expr = new TextBlock
+        {
+            Text = string.IsNullOrEmpty(item.Condition) ? "(no expression)" : item.Condition!,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(8, 0, 0, 0),
+        };
+        Grid.SetColumn(expr, 2);
+        grid.Children.Add(expr);
+
+        return grid;
+    }
+
+    private void RemoveCondition(ConditionalItem item)
+    {
+        if (_manifest is null) return;
+        ApplyEditsTo(_manifest);
+        _manifest.ConditionalItems?.Remove(item);
         Populate(_manifest);
         IsDirty = true;
     }

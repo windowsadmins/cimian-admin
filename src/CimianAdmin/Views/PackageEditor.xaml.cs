@@ -773,15 +773,25 @@ public sealed partial class PackageEditor : UserControl
         return string.Join("  •  ", bits);
     }
 
-    private static string FormatMetadata(Dictionary<string, string?> metadata)
+    private static string FormatMetadata(Dictionary<string, object?> metadata)
     {
         var sb = new StringBuilder();
         foreach (var (k, v) in metadata)
         {
-            sb.Append(k).Append(": ").AppendLine(v?.ToString() ?? string.Empty);
+            sb.Append(k).Append(": ").AppendLine(FormatMetadataValue(v));
         }
         return sb.ToString().TrimEnd();
     }
+
+    private static string FormatMetadataValue(object? value) => value switch
+    {
+        null => string.Empty,
+        string s => s,
+        // Nested mappings / sequences round-trip on save but render compactly here.
+        System.Collections.IDictionary => "{…}",
+        System.Collections.IEnumerable => "[…]",
+        _ => value.ToString() ?? string.Empty,
+    };
 
     private static List<string>? NullIfEmpty(List<string> list) =>
         list.Count == 0 ? null : list;

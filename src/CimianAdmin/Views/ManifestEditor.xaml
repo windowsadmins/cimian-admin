@@ -110,17 +110,10 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Managed" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <HyperlinkButton Grid.Column="1"
-                                             x:Name="AddConditionalButton"
-                                             Content="Add conditional"
-                                             Click="OnAddConditionalClicked"
-                                             Padding="4,2,4,2"
-                                             Margin="0,0,12,0" />
                             <TextBlock x:Name="ManagedConditionalHeader"
-                                       Grid.Column="2"
+                                       Grid.Column="1"
                                        Text="Conditionals"
                                        MinWidth="180"
                                        Style="{StaticResource CaptionTextBlockStyle}"
@@ -160,7 +153,25 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Notes -->
+                    <!-- Conditions section: dedicated home for add / edit / remove -->
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <TextBlock Text="Conditions"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       VerticalAlignment="Center" />
+                            <Button x:Name="AddConditionButton"
+                                    Content="Add condition…"
+                                    Click="OnAddConditionalClicked" />
+                        </StackPanel>
+                        <TextBlock x:Name="NoConditionsText"
+                                   Text="No conditions defined. Add one to scope items to specific machines."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   Visibility="Collapsed" />
+                        <ItemsControl x:Name="ConditionsList" />
+                    </StackPanel>
+
+                    <!-- Notes (last field) -->
                     <StackPanel Spacing="10">
                         <TextBlock Text="Notes" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBox x:Name="NotesField"

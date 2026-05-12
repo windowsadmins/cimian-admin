@@ -320,6 +320,7 @@ public sealed partial class MainWindow : Window
         NavPackages.IsEnabled = enabled;
         NavManifests.IsEnabled = enabled;
         NavCatalogs.IsEnabled = enabled;
+        NavGit.IsEnabled = enabled;
     }
 
     private NavigationViewItem? FindNavItem(string tag)
@@ -330,6 +331,7 @@ public sealed partial class MainWindow : Window
             "packages" => NavPackages,
             "manifests" => NavManifests,
             "catalogs" => NavCatalogs,
+            "git" => NavGit,
             _ => null,
         };
     }
@@ -343,6 +345,7 @@ public sealed partial class MainWindow : Window
             "packages" => App.Resolve<PackagesPage>(),
             "manifests" => App.Resolve<ManifestsPage>(),
             "catalogs" => App.Resolve<CatalogsPage>(),
+            "git" => App.Resolve<GitPage>(),
             _ => null,
         };
     }

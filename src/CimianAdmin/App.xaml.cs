@@ -52,6 +52,7 @@ public partial class App : Application
                 services.AddTransient<PackagesPage>();
                 services.AddTransient<ManifestsPage>();
                 services.AddTransient<CatalogsPage>();
+                services.AddTransient<GitPage>();
 
                 services.AddTransient<PackageEditorWindow>();
                 services.AddTransient<ManifestEditorWindow>();

@@ -82,10 +82,13 @@
                         Padding="8,2,8,2"
                         VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon Glyph="&#xF1D3;"
-                                  FontSize="11"
-                                  Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                  VerticalAlignment="Center" />
+                        <ImageIcon Height="14" Width="14"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center">
+                            <ImageIcon.Source>
+                                <SvgImageSource UriSource="ms-appx:///Assets/git-branch.svg" />
+                            </ImageIcon.Source>
+                        </ImageIcon>
                         <TextBlock x:Name="GitBranchText"
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -119,22 +122,47 @@
             <muxc:NavigationView.MenuItems>
                 <muxc:NavigationViewItem x:Name="NavRepository" Tag="repository" Content="Home">
                     <muxc:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE80F;" />
+                        <ImageIcon>
+                            <ImageIcon.Source>
+                                <SvgImageSource UriSource="ms-appx:///Assets/home.svg" />
+                            </ImageIcon.Source>
+                        </ImageIcon>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
                 <muxc:NavigationViewItem x:Name="NavPackages" Tag="packages" Content="Packages">
                     <muxc:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE7B8;" />
+                        <ImageIcon>
+                            <ImageIcon.Source>
+                                <SvgImageSource UriSource="ms-appx:///Assets/package.svg" />
+                            </ImageIcon.Source>
+                        </ImageIcon>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
                 <muxc:NavigationViewItem x:Name="NavManifests" Tag="manifests" Content="Manifests">
                     <muxc:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE8A5;" />
+                        <ImageIcon>
+                            <ImageIcon.Source>
+                                <SvgImageSource UriSource="ms-appx:///Assets/list-checks.svg" />
+                            </ImageIcon.Source>
+                        </ImageIcon>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
                 <muxc:NavigationViewItem x:Name="NavCatalogs" Tag="catalogs" Content="Catalogs">
                     <muxc:NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE82D;" />
+                        <ImageIcon>
+                            <ImageIcon.Source>
+                                <SvgImageSource UriSource="ms-appx:///Assets/library.svg" />
+                            </ImageIcon.Source>
+                        </ImageIcon>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+                <muxc:NavigationViewItem x:Name="NavGit" Tag="git" Content="Git">
+                    <muxc:NavigationViewItem.Icon>
+                        <ImageIcon>
+                            <ImageIcon.Source>
+                                <SvgImageSource UriSource="ms-appx:///Assets/git-branch.svg" />
+                            </ImageIcon.Source>
+                        </ImageIcon>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>

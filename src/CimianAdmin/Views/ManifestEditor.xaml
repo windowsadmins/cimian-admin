@@ -7,12 +7,29 @@
     xmlns:local="using:CimianAdmin.Views">
 
     <Grid>
-        <TextBlock
-            x:Name="EmptyState"
-            Text="Select a manifest to view or edit its details."
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Border x:Name="EmptyState"
+                Style="{StaticResource CardStyle}"
+                Shadow="{StaticResource CardShadow}"
+                Translation="0,0,16"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Padding="32,24,32,24"
+                MaxWidth="420">
+            <StackPanel Spacing="12" HorizontalAlignment="Center">
+                <ImageIcon Width="32" Height="32"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}">
+                    <ImageIcon.Source>
+                        <SvgImageSource UriSource="ms-appx:///Assets/list-checks.svg" />
+                    </ImageIcon.Source>
+                </ImageIcon>
+                <TextBlock Text="Select a manifest to view or edit its details."
+                           Style="{StaticResource BodyTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center" />
+            </StackPanel>
+        </Border>
 
         <Grid x:Name="EditorRoot" Visibility="Collapsed">
             <Grid.RowDefinitions>
@@ -73,9 +90,13 @@
             </Grid>
 
             <ScrollViewer Grid.Row="1" Padding="20,0,20,20">
-                <StackPanel Spacing="24">
+                <StackPanel Spacing="20">
 
                     <!-- General (catalogs first, then included manifests, then display name) -->
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <StackPanel Spacing="10">
                         <TextBlock Text="General" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <StackPanel>
@@ -107,8 +128,13 @@
                             <TextBox x:Name="DisplayNameField" TextChanged="OnFieldChanged" />
                         </StackPanel>
                     </StackPanel>
+                    </Border>
 
                     <!-- Managed -->
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <StackPanel Spacing="10">
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
@@ -156,8 +182,13 @@
                                                   Changed="OnFieldChanged" />
                         </StackPanel>
                     </StackPanel>
+                    </Border>
 
                     <!-- Conditions section: dedicated home for add / edit / remove -->
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <StackPanel Spacing="10">
                         <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                             <TextBlock Text="Conditions"
@@ -174,14 +205,20 @@
                                    Visibility="Collapsed" />
                         <ItemsControl x:Name="ConditionsList" />
                     </StackPanel>
+                    </Border>
 
                     <!-- Notes (last field) -->
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <StackPanel Spacing="10">
                         <TextBlock Text="Notes" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBox x:Name="NotesField"
                                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
                                  TextChanged="OnFieldChanged" />
                     </StackPanel>
+                    </Border>
 
                 </StackPanel>
             </ScrollViewer>

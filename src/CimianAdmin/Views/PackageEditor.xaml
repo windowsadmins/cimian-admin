@@ -7,12 +7,29 @@
     xmlns:local="using:CimianAdmin.Views">
 
     <Grid x:Name="RootGrid">
-        <TextBlock
-            x:Name="EmptyState"
-            Text="Select a package to view or edit its details."
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Border x:Name="EmptyState"
+                Style="{StaticResource CardStyle}"
+                Shadow="{StaticResource CardShadow}"
+                Translation="0,0,16"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Padding="32,24,32,24"
+                MaxWidth="420">
+            <StackPanel Spacing="12" HorizontalAlignment="Center">
+                <ImageIcon Width="32" Height="32"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}">
+                    <ImageIcon.Source>
+                        <SvgImageSource UriSource="ms-appx:///Assets/package.svg" />
+                    </ImageIcon.Source>
+                </ImageIcon>
+                <TextBlock Text="Select a package to view or edit its details."
+                           Style="{StaticResource BodyTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center" />
+            </StackPanel>
+        </Border>
 
         <Grid x:Name="EditorRoot" Visibility="Collapsed">
             <Grid.RowDefinitions>

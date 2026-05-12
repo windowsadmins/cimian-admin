@@ -9,13 +9,17 @@
     xmlns:nodes="using:CimianAdmin.Models"
     xmlns:local="using:CimianAdmin.Views">
 
-    <Grid>
+    <Grid Padding="16,12,16,16" ColumnSpacing="16">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="320" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Grid Grid.Column="0" Padding="16,12,8,16" RowSpacing="8">
+        <Border Grid.Column="0"
+                Style="{StaticResource CardStyle}"
+                Shadow="{StaticResource CardShadow}"
+                Translation="0,0,16">
+        <Grid Padding="16,12,16,16" RowSpacing="8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -56,11 +60,13 @@
                 IsClosable="False"
                 IsOpen="False" />
         </Grid>
+        </Border>
 
         <Border
             Grid.Column="1"
-            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-            BorderThickness="1,0,0,0">
+            Style="{StaticResource CardStyle}"
+            Shadow="{StaticResource CardShadow}"
+            Translation="0,0,16">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

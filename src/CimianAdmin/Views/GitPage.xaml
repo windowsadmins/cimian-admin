@@ -105,10 +105,7 @@
                 </StackPanel>
 
                 <Border Grid.Row="1"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8">
+                        Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16">
                     <Grid>
                         <ListView x:Name="ChangesList"
                                   SelectionMode="Single"
@@ -258,10 +255,7 @@
                 </Grid>
 
                 <Border Grid.Row="1"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8">
+                        Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16">
                     <Grid>
                         <ScrollViewer x:Name="DiffScroller"
                                       HorizontalScrollMode="Enabled"
@@ -293,10 +287,7 @@
                  the app never sits silently while hooks/network do their thing. -->
             <Border x:Name="ProgressOverlay"
                     Visibility="Collapsed"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
+                    Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
                     Padding="12,10,12,10">
                 <Grid RowSpacing="6">
                     <Grid.RowDefinitions>

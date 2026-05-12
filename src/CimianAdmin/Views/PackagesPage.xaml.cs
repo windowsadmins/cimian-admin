@@ -23,9 +23,9 @@ public sealed partial class PackagesPage : Page
         Unloaded += OnUnloaded;
     }
 
-    // Lucide: file-text for package leaves, folder for category groups.
+    // Lucide: package for package leaves, folder for category groups.
     public static Uri NodeIconUri(bool hasPackage) =>
-        new(hasPackage ? "ms-appx:///Assets/file-text.svg" : "ms-appx:///Assets/folder.svg");
+        new(hasPackage ? "ms-appx:///Assets/package.svg" : "ms-appx:///Assets/folder.svg");
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

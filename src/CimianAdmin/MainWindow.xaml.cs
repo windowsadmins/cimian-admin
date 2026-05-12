@@ -9,6 +9,7 @@ using CimianAdmin.ViewModels;
 using CimianAdmin.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -43,6 +44,11 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         Title = Constants.AppName;
+
+        // Mica gives the whole window a system-tinted ambient backdrop instead of
+        // the flat black we'd otherwise get in dark mode. WinUI 1.3+ handles the
+        // unsupported-host fallback to SolidBackgroundFillColorBase automatically.
+        SystemBackdrop = new MicaBackdrop();
 
         _repositoryService.RepositoryChanged += OnRepositoryChanged;
         UpdateRepoTitle(_repositoryService.CurrentRepository);

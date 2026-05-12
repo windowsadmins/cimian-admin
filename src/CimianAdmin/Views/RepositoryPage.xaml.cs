@@ -350,16 +350,19 @@ public sealed partial class RepositoryPage : Page
             Style = (Style)Application.Current.Resources["TitleTextBlockStyle"],
         });
 
-        return new Border
+        var card = new Border
         {
-            Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
             Padding = new Thickness(20, 16, 20, 16),
             MinWidth = 160,
             Child = stack,
+            Style = (Style)Application.Current.Resources["CardStyle"],
+            Translation = new System.Numerics.Vector3(0, 0, 16),
         };
+        if (Application.Current.Resources["CardShadow"] is Microsoft.UI.Xaml.Media.Shadow shadow)
+        {
+            card.Shadow = shadow;
+        }
+        return card;
     }
 
     private async void OnValidateClicked(object sender, RoutedEventArgs e)

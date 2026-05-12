@@ -51,7 +51,7 @@
             </StackPanel>
 
             <Border Grid.Row="1"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     CornerRadius="6">
@@ -63,7 +63,7 @@
 
         <!-- Custom tab -->
         <Grid Grid.Row="1" x:Name="CustomTab" Visibility="Collapsed">
-            <Border Background="{ThemeResource LayerFillColorDefaultBrush}"
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
                     CornerRadius="6"

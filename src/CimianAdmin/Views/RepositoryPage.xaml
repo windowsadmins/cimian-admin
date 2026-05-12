@@ -47,7 +47,7 @@
                 <Border Grid.Column="1"
                         x:Name="IndexingPill"
                         Visibility="Collapsed"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="10"
@@ -62,10 +62,7 @@
             <Border Grid.Row="2"
                     x:Name="SearchResultsCard"
                     Visibility="Collapsed"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
+                    Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
                     Padding="20,12,20,12">
                 <StackPanel Spacing="8">
                     <Grid>
@@ -107,10 +104,7 @@
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
+                        Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
                         Padding="20,16,20,12">
                     <StackPanel Spacing="8">
                         <TextBlock Text="Recently modified pkginfo"
@@ -130,10 +124,7 @@
                 </Border>
 
                 <Border Grid.Column="1"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
+                        Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
                         Padding="20,16,20,12">
                     <StackPanel Spacing="8">
                         <TextBlock Text="Recently modified manifests"
@@ -156,10 +147,7 @@
             <Border Grid.Row="5"
                     x:Name="GitStatusCard"
                     Visibility="Collapsed"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
+                    Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
                     Padding="20,12,12,12">
                 <Grid ColumnSpacing="8">
                     <Grid.ColumnDefinitions>

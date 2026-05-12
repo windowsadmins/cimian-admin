@@ -152,17 +152,20 @@
                         <BitmapIcon Width="12" Height="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    VerticalAlignment="Center" UriSource="ms-appx:///Assets/user.svg" ShowAsMonochrome="True" />
-                        <TextBlock x:Name="IdentityText"
-                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxWidth="280"
-                                   Text="(no identity)" />
+                        <!-- Click the name/email to open the identity editor — no
+                             separate Edit button. HyperlinkButton renders as a flat
+                             text link styled like the surrounding caption. -->
                         <HyperlinkButton x:Name="EditIdentityButton"
-                                         Content="Edit"
-                                         Padding="4,0,4,0"
-                                         Click="OnEditIdentityClicked" />
+                                         Padding="0"
+                                         Click="OnEditIdentityClicked">
+                            <TextBlock x:Name="IdentityText"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="320"
+                                       Text="(no identity)" />
+                        </HyperlinkButton>
                     </StackPanel>
 
                     <StackPanel Grid.Column="1"

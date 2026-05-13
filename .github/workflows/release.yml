@@ -30,7 +30,9 @@ jobs:
           $siblingRoot = (Resolve-Path "$env:GITHUB_WORKSPACE\..\..").Path
           $target = Join-Path $siblingRoot 'packages\CimianTools'
           New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
-          git clone --depth=1 https://github.com/windowsadmins/cimian.git $target
+          # The Cimian.Import library extraction lives on feature/import-prompter
+          # (cimian PR #26). Once that PR merges to main, drop the --branch flag.
+          git clone --depth=1 --branch=feature/import-prompter https://github.com/windowsadmins/cimian.git $target
           if (-not (Test-Path "$target\shared\import\Cimian.Import.csproj")) {
             throw "Cimian.Import.csproj not found at expected path: $target\shared\import\Cimian.Import.csproj"
           }

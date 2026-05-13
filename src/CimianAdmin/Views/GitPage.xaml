@@ -305,7 +305,18 @@
                                       Padding="0,4,0,4">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
+                                        <!-- Per-row flyout — the menu item's DataContext binds to the row so the
+                                             click handler knows which commit to operate on without a separate
+                                             RightTapped event. -->
                                         <Grid Padding="6,6,6,6" ColumnSpacing="12">
+                                            <Grid.ContextFlyout>
+                                                <MenuFlyout>
+                                                    <MenuFlyoutItem Text="Copy as .patch"
+                                                                    Click="OnCopyPatchClicked" />
+                                                    <MenuFlyoutItem Text="Copy commit SHA"
+                                                                    Click="OnCopyShaClicked" />
+                                                </MenuFlyout>
+                                            </Grid.ContextFlyout>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="90" />
                                                 <ColumnDefinition Width="*" />

@@ -590,6 +590,56 @@ public sealed partial class GitPage : Page
         }
     }
 
+    /// <summary>
+    /// Right-click → "Copy as .patch" on a history row. Renders the commit via
+    /// LibGit2Sharp into an mbox-style patch (see <c>GitService.FormatPatchCore</c>)
+    /// and stuffs it onto the clipboard so the user can paste into a PR review or
+    /// pipe into <c>git am</c>.
+    /// </summary>
+    private async void OnCopyPatchClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row)
+        {
+            return;
+        }
+
+        try
+        {
+            var patch = await _gitService.FormatPatchAsync(_info, row.Sha).ConfigureAwait(true);
+            if (string.IsNullOrEmpty(patch))
+            {
+                ShowError("Copy as .patch failed", "git couldn't render that commit as a patch.");
+                return;
+            }
+
+            var data = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            data.SetText(patch);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(data);
+            ShowSuccess($"Copied {row.Sha} as .patch to clipboard.");
+        }
+        catch (Exception ex)
+        {
+            ShowError("Copy as .patch failed", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Right-click → "Copy commit SHA". Uses the abbreviated 12-char SHA the
+    /// history row already carries (matches what the row text displays).
+    /// </summary>
+    private void OnCopyShaClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row)
+        {
+            return;
+        }
+
+        var data = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        data.SetText(row.Sha);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(data);
+        ShowSuccess($"Copied SHA {row.Sha}.");
+    }
+
     // Wraps GitCommit to surface a friendly WhenDisplay for binding without a converter.
     private sealed class HistoryRow(GitCommit commit)
     {

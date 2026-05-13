@@ -103,6 +103,14 @@ public interface IGitService
     Task<string> GetCommitDiffAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns the full <c>git format-patch -1 --stdout &lt;sha&gt;</c> output for a
+    /// single commit — i.e. the canonical mbox-style patch with <c>From</c> header,
+    /// author, date, subject, commit body, then the unified diff. Suitable for
+    /// piping into <c>git am</c> or for pasting into a PR review.
+    /// </summary>
+    Task<string> FormatPatchAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Runs <c>git fetch</c> for the configured remote (default <c>origin</c>).
     /// Shells out so credential manager + progress output match the CLI.
     /// </summary>

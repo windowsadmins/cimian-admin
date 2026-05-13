@@ -2,6 +2,7 @@ namespace CimianAdmin.Infrastructure.Services;
 
 using System.Diagnostics;
 using System.Text;
+using CultureInfo = System.Globalization.CultureInfo;
 using CimianAdmin.Core.Models.Git;
 using CimianAdmin.Core.Services;
 using LibGit2Sharp;
@@ -138,6 +139,13 @@ public sealed class GitService : IGitService
         ArgumentNullException.ThrowIfNull(info);
         ArgumentException.ThrowIfNullOrWhiteSpace(sha);
         return Task.Run(() => GetCommitDiffCore(info, sha), cancellationToken);
+    }
+
+    public Task<string> FormatPatchAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha);
+        return Task.Run(() => FormatPatchCore(info, sha), cancellationToken);
     }
 
     public Task<GitFetchResult> FetchAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
@@ -452,6 +460,63 @@ public sealed class GitService : IGitService
                 ? repo.Diff.Compare<Patch>(null, commit.Tree, new CompareOptions { ContextLines = 3 })
                 : repo.Diff.Compare<Patch>(parentTree, commit.Tree, new CompareOptions { ContextLines = 3 });
             return patch.Content;
+        }
+        catch (LibGit2SharpException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors <c>git format-patch -1 --stdout &lt;sha&gt;</c>: an mbox-style header
+    /// (From line + author + date + subject), the commit body, a <c>---</c> separator,
+    /// then the unified diff. Returns empty when the sha can't be resolved.
+    /// </summary>
+    private static string FormatPatchCore(GitRepositoryInfo info, string sha)
+    {
+        try
+        {
+            using var repo = new Repository(info.GitRoot);
+            var commit = repo.Lookup<Commit>(sha);
+            if (commit is null)
+            {
+                return string.Empty;
+            }
+
+            var parentTree = commit.Parents.FirstOrDefault()?.Tree;
+            var patch = parentTree is null
+                ? repo.Diff.Compare<Patch>(null, commit.Tree, new CompareOptions { ContextLines = 3 })
+                : repo.Diff.Compare<Patch>(parentTree, commit.Tree, new CompareOptions { ContextLines = 3 });
+
+            var message = (commit.Message ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal);
+            var subjectEnd = message.IndexOf('\n', StringComparison.Ordinal);
+            var subject = (subjectEnd < 0 ? message : message[..subjectEnd]).TrimEnd();
+            var body = subjectEnd < 0 ? string.Empty : message[(subjectEnd + 1)..].TrimStart('\n');
+
+            // git's "From <sha> Mon Sep 17 00:00:00 2001" line is a fixed marker date,
+            // not the commit date — copying that exactly lets `git am` recognise the
+            // patch as a mailbox. The Date: header carries the real author timestamp,
+            // formatted to match git's RFC-2822-ish layout (timezone as +HHMM, no colon).
+            var author = commit.Author;
+            var when = author.When.ToString("ddd, d MMM yyyy HH:mm:ss ", CultureInfo.InvariantCulture)
+                     + author.When.ToString("zzz", CultureInfo.InvariantCulture).Replace(":", string.Empty, StringComparison.Ordinal);
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("From ").Append(commit.Sha).Append(" Mon Sep 17 00:00:00 2001\n");
+            sb.Append("From: ").Append(author.Name).Append(" <").Append(author.Email).Append(">\n");
+            sb.Append("Date: ").Append(when).Append('\n');
+            sb.Append("Subject: [PATCH] ").Append(subject).Append("\n\n");
+            if (!string.IsNullOrEmpty(body))
+            {
+                sb.Append(body.TrimEnd('\n')).Append("\n\n");
+            }
+            sb.Append("---\n");
+            sb.Append(patch.Content);
+            sb.Append("\n-- \n");
+            // LibGit2Sharp doesn't expose libgit2's build version cleanly; stamp a
+            // generic trailer so the patch parses as mbox without lying about a tool.
+            sb.Append("2.0\n");
+            return sb.ToString();
         }
         catch (LibGit2SharpException)
         {

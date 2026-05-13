@@ -11,6 +11,16 @@ using Windows.Storage.Pickers;
 using WinRT.Interop;
 
 /// <summary>
+/// Wizard state — drives the step indicator, panel visibility, and Back / Continue
+/// behavior. Steps 3-5 (scripts, location, review) plug in here as the wizard grows.
+/// </summary>
+internal enum WizardStep
+{
+    Review = 1,
+    EditMetadata = 2,
+}
+
+/// <summary>
 /// Cimiimport-native import wizard host. Idle view = drop-zone / file picker.
 /// Single-file selection auto-advances to Step 1 (detected metadata + template
 /// match banner). Multi-file selection enqueues for batch processing (M6).
@@ -20,28 +30,30 @@ public sealed partial class ImportPage : Page
 {
     private readonly IRepositoryService _repositoryService;
     private readonly IPackageService _packageService;
-    // _metadataBuffer & _templateMatch carry forward into Step 2 (M4). _useTemplate
-    // gates whether catalogs/scripts/blocking_applications get inherited from the
-    // matched pkginfo when the M4 metadata form opens.
-#pragma warning disable CS0414 // assigned but never used — read in M4 wizard steps
+    private readonly ICatalogService _catalogService;
     private InstallerMetadata? _metadataBuffer;
     private Package? _templateMatch;
     private bool _useTemplate;
-#pragma warning restore CS0414
+    private WizardStep _step = WizardStep.Review;
+    private IReadOnlyList<string> _knownCatalogs = [];
+    private IReadOnlyList<string> _knownPackages = [];
 
     public ImportViewModel ViewModel { get; }
 
     public ImportPage(
         ImportViewModel viewModel,
         IRepositoryService repositoryService,
-        IPackageService packageService)
+        IPackageService packageService,
+        ICatalogService catalogService)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(repositoryService);
         ArgumentNullException.ThrowIfNull(packageService);
+        ArgumentNullException.ThrowIfNull(catalogService);
         ViewModel = viewModel;
         _repositoryService = repositoryService;
         _packageService = packageService;
+        _catalogService = catalogService;
         InitializeComponent();
     }
 
@@ -130,6 +142,7 @@ public sealed partial class ImportPage : Page
         DetectedGrid.Children.Clear();
         ExtractError.Visibility = Visibility.Collapsed;
         TemplateBanner.IsOpen = false;
+        SetStep(WizardStep.Review);
         ContinueButton.IsEnabled = false;
 
         // Run the extractor off the UI thread — MSI/MSIX parsing can touch the
@@ -176,8 +189,9 @@ public sealed partial class ImportPage : Page
         RenderDetectedFacts(meta);
         await CheckTemplateMatchAsync(meta).ConfigureAwait(true);
 
-        // M3 stops here — Continue moves to Step 2 in M4.
-        ContinueButton.IsEnabled = false;
+        // Continue lights up once we have valid metadata; the user can now move to
+        // Step 2 to edit it. Steps 3-5 are still pending (M4 follow-up).
+        ContinueButton.IsEnabled = true;
     }
 
     private void RenderDetectedFacts(InstallerMetadata m)
@@ -270,9 +284,31 @@ public sealed partial class ImportPage : Page
         StartFreshButton.IsEnabled = false;
     }
 
-    private void OnContinueClicked(object sender, RoutedEventArgs e)
+    private async void OnContinueClicked(object sender, RoutedEventArgs e)
     {
-        // Step 2 (metadata edit form) arrives in M4.
+        // Pull edits from the previous step (if any) before moving on, so Back can
+        // restore them without losing the user's typing.
+        if (_step == WizardStep.EditMetadata)
+        {
+            CommitStep2Edits();
+            // Step 3 (scripts) is next — wired up in the M4 follow-up commit.
+            return;
+        }
+
+        if (_step == WizardStep.Review && _metadataBuffer is not null)
+        {
+            await EnterStep2Async().ConfigureAwait(true);
+        }
+    }
+
+    private void OnBackClicked(object sender, RoutedEventArgs e)
+    {
+        if (_step == WizardStep.EditMetadata)
+        {
+            // Capture the user's edits so a forward jump after Back doesn't drop them.
+            CommitStep2Edits();
+            SetStep(WizardStep.Review);
+        }
     }
 
     private void OnRestartClicked(object sender, RoutedEventArgs e)
@@ -293,6 +329,138 @@ public sealed partial class ImportPage : Page
         WizardView.Visibility = Visibility.Collapsed;
         IdleView.Visibility = Visibility.Visible;
         StatusText.Text = string.Empty;
+        SetStep(WizardStep.Review);
         ViewModel.Queue.Clear();
+    }
+
+    /// <summary>
+    /// Swap visible step panels + relabel the indicator + adjust Back/Continue.
+    /// Doesn't move metadata in or out — caller is responsible for that so a
+    /// back-then-forward flow can restore previously-typed edits.
+    /// </summary>
+    private void SetStep(WizardStep step)
+    {
+        _step = step;
+        Step1Panel.Visibility = step == WizardStep.Review ? Visibility.Visible : Visibility.Collapsed;
+        Step2Panel.Visibility = step == WizardStep.EditMetadata ? Visibility.Visible : Visibility.Collapsed;
+        BackButton.Visibility = step == WizardStep.Review ? Visibility.Collapsed : Visibility.Visible;
+
+        WizardStepLabel.Text = step switch
+        {
+            WizardStep.Review => "Step 1 of 4 · Review",
+            WizardStep.EditMetadata => "Step 2 of 4 · Edit metadata",
+            _ => "Wizard",
+        };
+    }
+
+    /// <summary>
+    /// First time we enter Step 2 we lazy-load catalog / package-name suggestions
+    /// so the chip pickers feel the same as PackageEditor. Repeat entries (Back
+    /// then forward) reuse the cached lists. Pre-fills every field from
+    /// <c>_metadataBuffer</c> + <c>_templateMatch</c> (when "Use template" was
+    /// selected in Step 1).
+    /// </summary>
+    private async Task EnterStep2Async()
+    {
+        if (_metadataBuffer is null) return;
+
+        if (_knownCatalogs.Count == 0)
+        {
+            try
+            {
+                _knownCatalogs = await _catalogService.GetCatalogNamesAsync().ConfigureAwait(true);
+            }
+            catch
+            {
+                _knownCatalogs = [];
+            }
+        }
+
+        if (_knownPackages.Count == 0)
+        {
+            try
+            {
+                var all = await _packageService.GetAllPackagesAsync().ConfigureAwait(true);
+                _knownPackages = [.. all
+                    .Select(p => p.Name)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)];
+            }
+            catch
+            {
+                _knownPackages = [];
+            }
+        }
+
+        CatalogsPicker.Suggestions = _knownCatalogs;
+        BlockingPicker.Suggestions = _knownPackages;
+
+        NameBox.Text = _metadataBuffer.ID ?? string.Empty;
+        VersionBox.Text = _metadataBuffer.Version ?? string.Empty;
+        DeveloperBox.Text = _metadataBuffer.Developer ?? string.Empty;
+        CategoryBox.Text = _metadataBuffer.Category ?? string.Empty;
+        DescriptionBox.Text = _metadataBuffer.Description ?? string.Empty;
+        UnattendedInstallCheck.IsChecked = _metadataBuffer.UnattendedInstall;
+        UnattendedUninstallCheck.IsChecked = _metadataBuffer.UnattendedUninstall;
+
+        // Architecture combo follows the same encoding the picker tags carry —
+        // "x64", "arm64", or "x64,arm64". Fall back to x64 when the extractor
+        // couldn't pin it down.
+        var archKey = _metadataBuffer.SupportedArch.Count switch
+        {
+            0 => "x64",
+            1 => _metadataBuffer.SupportedArch[0],
+            _ => "x64,arm64",
+        };
+        ArchCombo.SelectedIndex = archKey switch
+        {
+            "arm64" => 1,
+            "x64,arm64" => 2,
+            _ => 0,
+        };
+
+        // Catalogs / blocking apps: prefer the template's values when the user
+        // chose "Use template" in Step 1; otherwise start with whatever the
+        // installer's existing metadata had (typically empty for a fresh import).
+        if (_useTemplate && _templateMatch is not null)
+        {
+            CatalogsPicker.SetItems(_templateMatch.Catalogs);
+            BlockingPicker.SetItems(_templateMatch.BlockingApplications);
+        }
+        else
+        {
+            CatalogsPicker.SetItems(_metadataBuffer.Catalogs);
+            BlockingPicker.SetItems(_metadataBuffer.BlockingApps ?? []);
+        }
+
+        SetStep(WizardStep.EditMetadata);
+    }
+
+    /// <summary>
+    /// Reads Step 2 inputs back into <c>_metadataBuffer</c>. Idempotent — safe to
+    /// call from Back, Continue, or before Cancel; Step 3 (scripts) will read the
+    /// updated buffer.
+    /// </summary>
+    private void CommitStep2Edits()
+    {
+        if (_metadataBuffer is null) return;
+
+        _metadataBuffer.ID = NameBox.Text.Trim();
+        _metadataBuffer.Version = VersionBox.Text.Trim();
+        _metadataBuffer.Developer = DeveloperBox.Text.Trim();
+        _metadataBuffer.Category = CategoryBox.Text.Trim();
+        _metadataBuffer.Description = DescriptionBox.Text.Trim();
+        _metadataBuffer.UnattendedInstall = UnattendedInstallCheck.IsChecked == true;
+        _metadataBuffer.UnattendedUninstall = UnattendedUninstallCheck.IsChecked == true;
+
+        if (ArchCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            _metadataBuffer.SupportedArch = tag.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+            _metadataBuffer.Architecture = tag;
+        }
+
+        _metadataBuffer.Catalogs = CatalogsPicker.GetItems();
+        _metadataBuffer.BlockingApps = BlockingPicker.GetItems();
     }
 }

@@ -7,6 +7,7 @@ using CimianAdmin.Models;
 using CimianAdmin.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.ApplicationModel.DataTransfer;
 
 public sealed partial class PackagesPage : Page
 {
@@ -115,6 +116,48 @@ public sealed partial class PackagesPage : Page
             && node.Package is Package package)
         {
             App.Resolve<PackageEditorWindow>().Open(package);
+        }
+    }
+
+    /// <summary>
+    /// Accept installer files dropped anywhere on the Packages page so the user
+    /// doesn't have to switch to the Import tab first. We only opt in for
+    /// StorageItems so dragging a row inside the page doesn't accidentally
+    /// trigger import.
+    /// </summary>
+    private void OnInstallerDragOver(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+            e.DragUIOverride.Caption = "Start import wizard";
+            e.DragUIOverride.IsCaptionVisible = true;
+            e.DragUIOverride.IsContentVisible = true;
+        }
+    }
+
+    private async void OnInstallerDrop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        var items = await e.DataView.GetStorageItemsAsync();
+        var paths = items
+            .OfType<Windows.Storage.StorageFile>()
+            .Select(f => f.Path)
+            .ToList();
+        if (paths.Count == 0) return;
+
+        // Bounce to the Import tab and let its handler do the wizard entry.
+        // This keeps the dispatch logic in one place — the same code path runs
+        // whether files arrive via the Import drop zone, the picker, or here.
+        if (App.MainWindowInstance is { } window)
+        {
+            window.NavigateTo("import");
+            var importPage = App.Resolve<Views.Import.ImportPage>();
+            await importPage.HandleExternalFilesAsync(paths).ConfigureAwait(true);
         }
     }
 }

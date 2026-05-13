@@ -124,6 +124,18 @@ public sealed partial class ImportPage : Page
     }
 
     /// <summary>
+    /// Entry point for outside callers (e.g. the Packages tab forwarding a drop).
+    /// Same dispatch as the in-tab drop / picker: one file auto-advances into the
+    /// wizard, many files queue for batch import. The caller is expected to have
+    /// already navigated to the Import tab before invoking this.
+    /// </summary>
+    public Task HandleExternalFilesAsync(IEnumerable<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return HandleSelectedFilesAsync([.. paths]);
+    }
+
+    /// <summary>
     /// Single file → auto-advance into Step 1 of the wizard (mirrors what a CLI
     /// invocation does after the first prompt: extract + show + ask).
     /// Multi-file → enqueue for batch import (queue UI lands in M6).

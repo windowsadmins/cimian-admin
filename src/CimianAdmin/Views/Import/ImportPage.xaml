@@ -14,9 +14,10 @@
         <StackPanel Grid.Row="0" Spacing="6">
             <TextBlock Text="Import"
                        Style="{StaticResource TitleLargeTextBlockStyle}" />
-            <TextBlock Text="Drop installers (MSI / EXE / NUPKG / MSIX) anywhere on this page to start the cimiimport wizard."
+            <TextBlock Text="Drop one or more installer files (MSI / EXE / NUPKG / MSIX) anywhere on this page — or use the picker below to select several at once. A single file opens the wizard immediately; multiple files queue up for batch import."
                        Style="{StaticResource CaptionTextBlockStyle}"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap" />
         </StackPanel>
 
         <!-- Idle view: drop-zone on top, batch queue below (visible only when the
@@ -44,12 +45,19 @@
                                   Stroke="{ThemeResource TextFillColorTertiaryBrush}"
                                   Data="M21,15 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V15 M17,8 L12,3 L7,8 M12,3 V15" />
                         </Viewbox>
-                        <TextBlock Text="Drop installer files here"
+                        <TextBlock Text="Drop one or more installer files here"
                                    Style="{StaticResource SubtitleTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    HorizontalAlignment="Center" />
+                        <TextBlock Text="Drop a single file to open the wizard, or several to queue a batch import."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   MaxWidth="380"
+                                   TextWrapping="Wrap" />
                         <Button x:Name="PickFileButton"
-                                Content="Or pick a file…"
+                                Content="Or pick one or more files…"
                                 HorizontalAlignment="Center"
                                 Click="OnPickFileClicked" />
                         <TextBlock x:Name="StatusText"

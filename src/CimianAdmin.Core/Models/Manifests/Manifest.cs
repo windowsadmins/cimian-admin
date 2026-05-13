@@ -48,7 +48,11 @@ public sealed class Manifest
     [YamlIgnore]
     public DateTime? LastModified { get; set; }
 
-    /// <summary>File creation time (UTC) — when this manifest file was first written.</summary>
+    /// <summary>
+    /// Filesystem creation time (UTC) of this manifest file in the current
+    /// working copy. NOT a repo-history value — clone, copy, or fresh checkout
+    /// resets it. Use git history if you need authoring time.
+    /// </summary>
     [YamlIgnore]
     public DateTime? Created { get; set; }
 }

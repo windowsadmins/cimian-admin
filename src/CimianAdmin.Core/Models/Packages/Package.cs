@@ -158,8 +158,10 @@ public sealed class Package
     public DateTime? LastModified { get; set; }
 
     /// <summary>
-    /// File creation time (UTC) — when this pkginfo was first written to the repo.
-    /// On NTFS this survives content edits; on FAT-like filesystems it may match
+    /// Filesystem creation time (UTC) of this pkginfo file in the current working
+    /// copy. Note this is NOT a repo-history value — a fresh git clone, copy, or
+    /// branch checkout will reset it to "now", so don't use it to reason about
+    /// when the pkginfo was first authored. On FAT-like filesystems it may match
     /// LastModified.
     /// </summary>
     [YamlIgnore]

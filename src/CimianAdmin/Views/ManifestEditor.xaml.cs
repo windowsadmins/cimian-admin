@@ -184,7 +184,7 @@ public sealed partial class ManifestEditor : UserControl
                 : manifest.DisplayName!;
             NameText.Text = manifest.Name ?? string.Empty;
             FilePathText.Text = ToRepoRelativePath(manifest.FilePath);
-            TimestampsText.Text = FormatTimestamps(manifest.Created, manifest.LastModified);
+            TimestampsText.Text = TimestampFormatter.FormatCreatedModified(manifest.Created, manifest.LastModified);
 
             DisplayNameField.Text = manifest.DisplayName ?? string.Empty;
             BuildCatalogChecklist(manifest.Catalogs);
@@ -495,21 +495,6 @@ public sealed partial class ManifestEditor : UserControl
         if (!fullPath.StartsWith(repo.RootPath, StringComparison.OrdinalIgnoreCase)) return fullPath;
         var rel = Path.GetRelativePath(repo.RootPath, fullPath);
         return rel.Replace(Path.DirectorySeparatorChar, '/');
-    }
-
-    /// <summary>"Created · Modified" caption — UTC dates rendered in local time.</summary>
-    private static string FormatTimestamps(DateTime? created, DateTime? modified)
-    {
-        static string Fmt(DateTime? t) => t is null
-            ? string.Empty
-            : t.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.CurrentCulture);
-
-        var c = Fmt(created);
-        var m = Fmt(modified);
-        if (string.IsNullOrEmpty(c) && string.IsNullOrEmpty(m)) return string.Empty;
-        if (string.IsNullOrEmpty(c)) return $"Modified {m}";
-        if (string.IsNullOrEmpty(m)) return $"Created {c}";
-        return $"Created {c}  ·  Modified {m}";
     }
 
     private const string TopLevelContextId = "";

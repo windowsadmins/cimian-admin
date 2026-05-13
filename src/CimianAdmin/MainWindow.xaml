@@ -67,6 +67,26 @@
                         Spacing="8"
                         VerticalAlignment="Center"
                         Margin="0,0,140,0">
+                <Button x:Name="SaveAllButton"
+                        Visibility="Collapsed"
+                        Click="OnSaveAllClicked"
+                        Padding="10,4"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Viewbox Width="14" Height="14" VerticalAlignment="Center">
+                            <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                                  Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                                  Data="M19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 H16 L21,8 V19 A2,2 0 0 1 19,21 Z M17,21 V13 H7 V21 M7,3 V8 H15" />
+                        </Viewbox>
+                        <TextBlock x:Name="SaveAllText"
+                                   Text="Save all"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ToolTipService.ToolTip>
+                        <TextBlock x:Name="SaveAllTooltip" Text="Save all pending edits to disk" />
+                    </ToolTipService.ToolTip>
+                </Button>
                 <TextBlock x:Name="RepoTitleText"
                            Style="{StaticResource CaptionTextBlockStyle}"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"

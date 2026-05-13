@@ -17,6 +17,9 @@ public sealed partial class MainWindow : Window
 {
     private readonly IRepositoryService _repositoryService;
     private readonly IGitService _gitService;
+    private readonly IPackageService _packageService;
+    private readonly IManifestService _manifestService;
+    private readonly ISessionState _sessionState;
     private readonly MainViewModel _mainViewModel;
     private bool _suppressNavSelection;
     private string? _currentTag;
@@ -30,13 +33,25 @@ public sealed partial class MainWindow : Window
     private int _historyIndex = -1;
     private bool _suppressHistoryPush;
 
-    public MainWindow(IRepositoryService repositoryService, IGitService gitService, MainViewModel mainViewModel)
+    public MainWindow(
+        IRepositoryService repositoryService,
+        IGitService gitService,
+        IPackageService packageService,
+        IManifestService manifestService,
+        ISessionState sessionState,
+        MainViewModel mainViewModel)
     {
         ArgumentNullException.ThrowIfNull(repositoryService);
         ArgumentNullException.ThrowIfNull(gitService);
+        ArgumentNullException.ThrowIfNull(packageService);
+        ArgumentNullException.ThrowIfNull(manifestService);
+        ArgumentNullException.ThrowIfNull(sessionState);
         ArgumentNullException.ThrowIfNull(mainViewModel);
         _repositoryService = repositoryService;
         _gitService = gitService;
+        _packageService = packageService;
+        _manifestService = manifestService;
+        _sessionState = sessionState;
         _mainViewModel = mainViewModel;
 
         InitializeComponent();
@@ -45,15 +60,70 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         Title = Constants.AppName;
 
-        // Mica gives the whole window a system-tinted ambient backdrop instead of
-        // the flat black we'd otherwise get in dark mode. WinUI 1.3+ handles the
-        // unsupported-host fallback to SolidBackgroundFillColorBase automatically.
         SystemBackdrop = new MicaBackdrop();
 
         _repositoryService.RepositoryChanged += OnRepositoryChanged;
+        _sessionState.Changed += OnSessionStateChanged;
         UpdateRepoTitle(_repositoryService.CurrentRepository);
         UpdateNavEnabled(_repositoryService.CurrentRepository is not null);
+        UpdateSaveAllButton();
         _ = RefreshGitIndicatorAsync(_repositoryService.CurrentRepository);
+    }
+
+    private void OnSessionStateChanged(object? sender, EventArgs e)
+    {
+        if (DispatcherQueue is null || DispatcherQueue.HasThreadAccess) UpdateSaveAllButton();
+        else DispatcherQueue.TryEnqueue(UpdateSaveAllButton);
+    }
+
+    private void UpdateSaveAllButton()
+    {
+        var n = _sessionState.TotalDirtyCount;
+        if (n == 0)
+        {
+            SaveAllButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+        SaveAllButton.Visibility = Visibility.Visible;
+        SaveAllText.Text = string.Create(CultureInfo.InvariantCulture, $"Save all ({n})");
+    }
+
+    private async void OnSaveAllClicked(object sender, RoutedEventArgs e)
+    {
+        SaveAllButton.IsEnabled = false;
+        try
+        {
+            // Snapshot so we can iterate without worrying about the underlying
+            // set mutating as MarkClean fires Changed events back at us.
+            foreach (var pkg in _sessionState.DirtyPackages)
+            {
+                try
+                {
+                    await _packageService.SavePackageAsync(pkg).ConfigureAwait(true);
+                    _sessionState.MarkPackageClean(pkg);
+                }
+                catch
+                {
+                    // Leave it dirty so the user can retry; don't abort the rest.
+                }
+            }
+            foreach (var mf in _sessionState.DirtyManifests)
+            {
+                try
+                {
+                    await _manifestService.SaveManifestAsync(mf).ConfigureAwait(true);
+                    _sessionState.MarkManifestClean(mf);
+                }
+                catch
+                {
+                }
+            }
+        }
+        finally
+        {
+            SaveAllButton.IsEnabled = true;
+            UpdateSaveAllButton();
+        }
     }
 
     /// <summary>

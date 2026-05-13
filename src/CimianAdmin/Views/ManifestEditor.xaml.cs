@@ -15,6 +15,7 @@ public sealed partial class ManifestEditor : UserControl
     private readonly IPackageService _packageService;
     private readonly IGitService _gitService;
     private readonly IRepositoryService _repositoryService;
+    private readonly ISessionState _sessionState;
     private Manifest? _manifest;
     private bool _suppressDirty;
     private IReadOnlyList<string> _knownCatalogs = [];
@@ -27,7 +28,8 @@ public sealed partial class ManifestEditor : UserControl
             App.Resolve<ICatalogService>(),
             App.Resolve<IPackageService>(),
             App.Resolve<IGitService>(),
-            App.Resolve<IRepositoryService>())
+            App.Resolve<IRepositoryService>(),
+            App.Resolve<ISessionState>())
     {
     }
 
@@ -36,19 +38,35 @@ public sealed partial class ManifestEditor : UserControl
         ICatalogService catalogService,
         IPackageService packageService,
         IGitService gitService,
-        IRepositoryService repositoryService)
+        IRepositoryService repositoryService,
+        ISessionState sessionState)
     {
         ArgumentNullException.ThrowIfNull(manifestService);
         ArgumentNullException.ThrowIfNull(catalogService);
         ArgumentNullException.ThrowIfNull(packageService);
         ArgumentNullException.ThrowIfNull(gitService);
         ArgumentNullException.ThrowIfNull(repositoryService);
+        ArgumentNullException.ThrowIfNull(sessionState);
         _manifestService = manifestService;
         _catalogService = catalogService;
         _packageService = packageService;
         _gitService = gitService;
         _repositoryService = repositoryService;
+        _sessionState = sessionState;
         InitializeComponent();
+        _sessionState.Changed += OnSessionStateChanged;
+        Unloaded += (_, _) => _sessionState.Changed -= OnSessionStateChanged;
+    }
+
+    private void OnSessionStateChanged(object? sender, EventArgs e)
+    {
+        if (_manifest is null) return;
+        var sessionDirty = _sessionState.IsManifestDirty(_manifest);
+        if (sessionDirty != IsDirty)
+        {
+            IsDirty = sessionDirty;
+            if (!sessionDirty) Populate(_manifest);
+        }
     }
 
     public bool IsDirty
@@ -65,6 +83,15 @@ public sealed partial class ManifestEditor : UserControl
 
     public async void SetManifest(Manifest? manifest)
     {
+        // Session-scoped auto-save: flush in-memory edits to the outgoing
+        // manifest before switching, so clicking another row in the tree never
+        // discards typing. See PackageEditor.SetPackage for the parallel logic.
+        if (_manifest is not null && IsDirty)
+        {
+            ApplyEditsTo(_manifest);
+            _sessionState.MarkManifestDirty(_manifest);
+        }
+
         _manifest = manifest;
 
         if (manifest is null)
@@ -123,7 +150,7 @@ public sealed partial class ManifestEditor : UserControl
         IncludedPicker.Suggestions = _knownManifestNames;
 
         Populate(manifest);
-        IsDirty = false;
+        IsDirty = _sessionState.IsManifestDirty(manifest);
         StatusBar.IsOpen = false;
         await RefreshDiskChangedAsync(manifest).ConfigureAwait(true);
     }
@@ -246,6 +273,7 @@ public sealed partial class ManifestEditor : UserControl
             return;
         }
         IsDirty = true;
+        if (_manifest is not null) _sessionState.MarkManifestDirty(_manifest);
     }
 
     private async void OnAddConditionalClicked(object sender, RoutedEventArgs e)
@@ -357,6 +385,7 @@ public sealed partial class ManifestEditor : UserControl
         try
         {
             await _manifestService.SaveManifestAsync(_manifest).ConfigureAwait(true);
+            _sessionState.MarkManifestClean(_manifest);
             IsDirty = false;
             ShowStatus(InfoBarSeverity.Success, "Saved", $"Wrote {_manifest.FilePath}");
         }
@@ -373,6 +402,7 @@ public sealed partial class ManifestEditor : UserControl
             return;
         }
         Populate(_manifest);
+        _sessionState.MarkManifestClean(_manifest);
         IsDirty = false;
         StatusBar.IsOpen = false;
     }
@@ -403,6 +433,7 @@ public sealed partial class ManifestEditor : UserControl
         try
         {
             await _manifestService.DeleteManifestAsync(_manifest).ConfigureAwait(true);
+            _sessionState.MarkManifestClean(_manifest);
             _manifest = null;
             EditorRoot.Visibility = Visibility.Collapsed;
             EmptyState.Visibility = Visibility.Visible;

@@ -40,6 +40,7 @@ public partial class App : Application
                 services.AddSingleton<ICatalogService, CatalogService>();
                 services.AddSingleton<IGitService, GitService>();
                 services.AddSingleton<ISearchService, SearchService>();
+                services.AddSingleton<ISessionState, EditorSessionState>();
 
                 services.AddSingleton<MainViewModel>();
                 services.AddTransient<PackagesViewModel>();

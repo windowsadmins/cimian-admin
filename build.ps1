@@ -423,51 +423,98 @@ function Invoke-Build {
 # --- Release pipeline (publish + sign + cimipkg + sign MSI) ----------------
 
 function Resolve-ReleaseVersion {
-    if ($Version) {
-        # Validate so cimipkg / MSI Property[ProductVersion] don't choke on a
-        # malformed string later. yyyy.M.d.HHmm and yyyy.M.d both parse.
-        try { [void][System.Version]::Parse($Version) }
-        catch { throw "Invalid -Version '$Version' — must be a valid System.Version (e.g. 2026.5.13 or 1.2.3)." }
-        return $Version
+    # Validate the same way regardless of source — letting an invalid value
+    # through here just trades a friendly error here for an opaque one later
+    # inside cimipkg or MSI Property[ProductVersion]. yyyy.M.d and
+    # yyyy.M.d.HHmm both parse; semver-ish '1.2.3-beta' does not.
+    $candidate, $source = if ($Version)             { $Version,             '-Version' }
+                          elseif ($env:CIMIAN_VERSION) { $env:CIMIAN_VERSION, '$env:CIMIAN_VERSION' }
+                          else                       { (Get-Date -Format 'yyyy.M.d'), 'auto (today)' }
+
+    try { [void][System.Version]::Parse($candidate) }
+    catch { throw "Invalid version '$candidate' from $source — must be a valid System.Version (e.g. 2026.5.13 or 1.2.3)." }
+    return $candidate
+}
+
+function Assert-CimipkgTrusted {
+    # Any cimipkg.exe we're about to spawn — whether sibling, on PATH, or
+    # downloaded — must carry a Valid Authenticode signature from the expected
+    # publisher. Caught a real supply-chain risk in code review: previously we
+    # ran whatever the latest GitHub release happened to be. The expected
+    # signer subject is overridable via CIMIPKG_EXPECTED_SUBJECT for orgs that
+    # host their own fork with a different cert.
+    param([Parameter(Mandatory)][string]$Path)
+
+    $sig = Get-AuthenticodeSignature -FilePath $Path
+    if ($sig.Status -ne 'Valid') {
+        throw "cimipkg.exe at '$Path' is not Authenticode-Valid (Status=$($sig.Status)). Refusing to run."
     }
-    if ($env:CIMIAN_VERSION) { return $env:CIMIAN_VERSION }
-    return Get-Date -Format 'yyyy.M.d'
+    $expectedSubject = if ($env:CIMIPKG_EXPECTED_SUBJECT) { $env:CIMIPKG_EXPECTED_SUBJECT } else { 'EmilyCarrU' }
+    $subject = $sig.SignerCertificate.Subject
+    if ($subject -notlike "*$expectedSubject*") {
+        throw "cimipkg.exe at '$Path' is signed by '$subject', which does not match expected '*$expectedSubject*'. Refusing to run. Set `$env:CIMIPKG_EXPECTED_SUBJECT to override."
+    }
+    Write-BuildLog "cimipkg trusted: subject='$subject'" 'SUCCESS'
 }
 
 function Get-CimipkgPath {
     # Try sibling CimianTools repo first (devs working on both have it built).
-    $sibling = Join-Path $repoRoot '..\CimianTools\release\x64\cimipkg.exe'
-    if (Test-Path $sibling) { return (Resolve-Path $sibling).Path }
-
-    $sibling = Join-Path $repoRoot '..\CimianTools\release\arm64\cimipkg.exe'
-    if (Test-Path $sibling) { return (Resolve-Path $sibling).Path }
+    foreach ($p in @(
+        (Join-Path $repoRoot '..\CimianTools\release\x64\cimipkg.exe'),
+        (Join-Path $repoRoot '..\CimianTools\release\arm64\cimipkg.exe')
+    )) {
+        if (Test-Path $p) {
+            $resolved = (Resolve-Path $p).Path
+            Assert-CimipkgTrusted -Path $resolved
+            return $resolved
+        }
+    }
 
     # Then PATH.
     $onPath = Get-Command cimipkg.exe -ErrorAction SilentlyContinue
-    if ($onPath) { return $onPath.Source }
+    if ($onPath) {
+        Assert-CimipkgTrusted -Path $onPath.Source
+        return $onPath.Source
+    }
 
-    # Last resort: pull the latest release of windowsadmins/cimian-pkg.
+    # Last resort: pull a pinned release of windowsadmins/cimian-pkg. Latest is
+    # *not* used as the default — pinning to a known-good tag is the whole
+    # point of treating this as a supply-chain decision. CIMIPKG_VERSION must
+    # be set to opt in.
     $toolsDir = Join-Path $repoRoot '.tools'
     $local = Join-Path $toolsDir 'cimipkg.exe'
-    if (Test-Path $local) { return $local }
+    if (Test-Path $local) {
+        Assert-CimipkgTrusted -Path $local
+        return $local
+    }
 
-    Write-BuildLog 'cimipkg.exe not found locally; downloading from windowsadmins/cimian-pkg release'
+    if (-not $env:CIMIPKG_VERSION) {
+        throw @"
+cimipkg.exe not found locally and no CIMIPKG_VERSION pin is set.
+
+Set `$env:CIMIPKG_VERSION to the windowsadmins/cimian-pkg release tag you
+want to download (e.g. 'v1.4.0'). Pinning prevents the local release
+pipeline from silently picking up an unreviewed cimipkg upgrade.
+"@
+    }
+
+    Write-BuildLog "Downloading cimipkg @ $env:CIMIPKG_VERSION from windowsadmins/cimian-pkg"
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
         throw 'cimipkg.exe not found and gh CLI is unavailable. Install cimipkg or gh and retry.'
     }
     New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
-    # Prefer zipped distribution if present, else direct exe.
-    & gh release download --repo windowsadmins/cimian-pkg --pattern 'cimipkg-win-x64.zip' --dir $toolsDir 2>$null
+    & gh release download $env:CIMIPKG_VERSION --repo windowsadmins/cimian-pkg --pattern 'cimipkg-win-x64.zip' --dir $toolsDir 2>$null
     $zip = Join-Path $toolsDir 'cimipkg-win-x64.zip'
     if (Test-Path $zip) {
         Expand-Archive -Path $zip -DestinationPath $toolsDir -Force
         Remove-Item $zip -Force -ErrorAction SilentlyContinue
     } else {
-        & gh release download --repo windowsadmins/cimian-pkg --pattern 'cimipkg.exe' --dir $toolsDir
+        & gh release download $env:CIMIPKG_VERSION --repo windowsadmins/cimian-pkg --pattern 'cimipkg.exe' --dir $toolsDir
     }
     if (-not (Test-Path $local)) {
-        throw 'Failed to download cimipkg.exe'
+        throw "Failed to download cimipkg.exe from tag '$env:CIMIPKG_VERSION'"
     }
+    Assert-CimipkgTrusted -Path $local
     return $local
 }
 
@@ -525,9 +572,11 @@ function Invoke-ReleaseForArch {
         Set-Content "$stagingDir\build-info.yaml" -Encoding UTF8
     Copy-Item (Join-Path $repoRoot 'scripts\*.ps1') "$stagingDir\scripts\" -Force
 
-    # 4. cimipkg → MSI.
+    # 4. cimipkg → MSI. Let stdout stream (don't pipe to Out-Null) so the
+    # --verbose diagnostics survive when packaging fails — that's the whole
+    # reason we pass --verbose in the first place.
     Write-BuildLog "Running cimipkg for $Arch MSI..."
-    & $CimipkgExe --verbose $stagingDir | Out-Null
+    & $CimipkgExe --verbose $stagingDir
     if ($LASTEXITCODE -ne 0) { throw "cimipkg MSI build failed for $Arch" }
     $msi = Get-ChildItem "$stagingDir\build\*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $msi) { throw "MSI output not found for $Arch" }
@@ -539,11 +588,11 @@ function Invoke-ReleaseForArch {
         Invoke-SignArtifacts -Paths @($msiDest) -Thumbprint $SignThumbprint -Store $SignStore
     }
 
-    # 6. cimipkg → nupkg (Chocolatey-compatible). nupkgs aren't traditionally
-    # Authenticode-signed; nuget sign needs a different cert chain so we leave
-    # them as-is.
+    # 6. cimipkg → nupkg (Chocolatey-compatible). Same streaming reasoning as
+    # the MSI step. nupkgs aren't traditionally Authenticode-signed; nuget sign
+    # needs a different cert chain so we leave them as-is.
     Write-BuildLog "Running cimipkg for $Arch nupkg..."
-    & $CimipkgExe --nupkg --verbose $stagingDir | Out-Null
+    & $CimipkgExe --nupkg --verbose $stagingDir
     if ($LASTEXITCODE -ne 0) {
         Write-BuildLog "nupkg build failed for $Arch (non-fatal)" 'WARNING'
     } else {

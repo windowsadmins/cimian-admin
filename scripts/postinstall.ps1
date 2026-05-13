@@ -59,9 +59,13 @@ try {
             if ([string]::IsNullOrEmpty($version)) { $version = $versionInfo.FileVersion }
         }
     }
+    # Avoid the ?? null-coalescing operator here — MSI custom actions run under
+    # Windows PowerShell 5.1 by default, where ?? is a parse error that takes
+    # the whole script offline.
+    if ([string]::IsNullOrEmpty($version)) { $version = 'unknown' }
     $registryPath = 'HKLM:\SOFTWARE\Cimian\CimianAdmin'
     if (-not (Test-Path $registryPath)) { New-Item -Path $registryPath -Force | Out-Null }
-    Set-ItemProperty -Path $registryPath -Name 'Version' -Value ($version ?? 'unknown') -Type String
+    Set-ItemProperty -Path $registryPath -Name 'Version' -Value $version -Type String
     Set-ItemProperty -Path $registryPath -Name 'InstallPath' -Value $InstallDir -Type String
     Write-Host "Wrote registry stamp at $registryPath"
 } catch {

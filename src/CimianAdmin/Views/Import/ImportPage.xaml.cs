@@ -19,6 +19,7 @@ internal enum WizardStep
     Review = 1,
     EditMetadata = 2,
     Scripts = 3,
+    LocationAndReview = 4,
 }
 
 /// <summary>
@@ -148,6 +149,7 @@ public sealed partial class ImportPage : Page
 
     private async Task EnterWizardAsync(string filePath)
     {
+        _sourceInstallerPath = filePath;
         IdleView.Visibility = Visibility.Collapsed;
         WizardView.Visibility = Visibility.Visible;
         WizardFileName.Text = System.IO.Path.GetFileName(filePath);
@@ -312,7 +314,10 @@ public sealed partial class ImportPage : Page
                 break;
             case WizardStep.Scripts:
                 CommitStep3Edits();
-                // Step 4 (location + review) is the next slice.
+                EnterStep4();
+                break;
+            case WizardStep.LocationAndReview:
+                await SaveFromStep4Async().ConfigureAwait(true);
                 break;
         }
     }
@@ -328,6 +333,9 @@ public sealed partial class ImportPage : Page
             case WizardStep.Scripts:
                 CommitStep3Edits();
                 SetStep(WizardStep.EditMetadata);
+                break;
+            case WizardStep.LocationAndReview:
+                SetStep(WizardStep.Scripts);
                 break;
         }
     }
@@ -369,13 +377,20 @@ public sealed partial class ImportPage : Page
         Step1Panel.Visibility = step == WizardStep.Review ? Visibility.Visible : Visibility.Collapsed;
         Step2Panel.Visibility = step == WizardStep.EditMetadata ? Visibility.Visible : Visibility.Collapsed;
         Step3Panel.Visibility = step == WizardStep.Scripts ? Visibility.Visible : Visibility.Collapsed;
+        Step4Panel.Visibility = step == WizardStep.LocationAndReview ? Visibility.Visible : Visibility.Collapsed;
         BackButton.Visibility = step == WizardStep.Review ? Visibility.Collapsed : Visibility.Visible;
+
+        // Continue → Save when we land on the final step. Re-enabled in EnterStep4
+        // after the YAML preview has rendered (it stays disabled if we can't build
+        // a valid pkginfo yet).
+        ContinueButton.Content = step == WizardStep.LocationAndReview ? "Save" : "Continue";
 
         WizardStepLabel.Text = step switch
         {
             WizardStep.Review => "Step 1 of 4 · Review",
             WizardStep.EditMetadata => "Step 2 of 4 · Edit metadata",
             WizardStep.Scripts => "Step 3 of 4 · Scripts",
+            WizardStep.LocationAndReview => "Step 4 of 4 · Location and review",
             _ => "Wizard",
         };
     }
@@ -531,4 +546,198 @@ public sealed partial class ImportPage : Page
     }
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    // ---- Step 4: location + review ----
+
+    private string _sourceInstallerPath = string.Empty;
+
+    /// <summary>
+    /// Builds the Step 4 view: a subdir entry, computed paths, and a live YAML
+    /// preview that mirrors what will land on disk if the user clicks Save.
+    /// Subdir changes re-render the resolved-paths line on the fly.
+    /// </summary>
+    private void EnterStep4()
+    {
+        SaveStatusBar.IsOpen = false;
+        SubdirBox.TextChanged -= OnSubdirChanged;
+        SubdirBox.TextChanged += OnSubdirChanged;
+
+        // Default the subdir to the template's location (if any) or empty.
+        if (string.IsNullOrEmpty(SubdirBox.Text) && _useTemplate && _templateMatch?.FilePath is { } existingPath
+            && _repositoryService.CurrentRepository is { } repo
+            && existingPath.StartsWith(repo.PkgsInfoPath, StringComparison.OrdinalIgnoreCase))
+        {
+            var relative = Path.GetRelativePath(repo.PkgsInfoPath, Path.GetDirectoryName(existingPath) ?? string.Empty);
+            SubdirBox.Text = relative == "." ? string.Empty : relative.Replace('\\', '/');
+        }
+
+        UpdateStep4Preview();
+        SetStep(WizardStep.LocationAndReview);
+    }
+
+    private void OnSubdirChanged(object sender, TextChangedEventArgs e) => UpdateStep4Preview();
+
+    private void UpdateStep4Preview()
+    {
+        if (_metadataBuffer is null || _repositoryService.CurrentRepository is not { } repo)
+        {
+            ResolvedPathsText.Text = string.Empty;
+            YamlPreviewText.Text = string.Empty;
+            return;
+        }
+
+        var subdir = (SubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\');
+        var ext = Path.GetExtension(_sourceInstallerPath);
+        var fileBase = $"{_metadataBuffer.ID}-{_metadataBuffer.Version}";
+        var installerRel = string.IsNullOrEmpty(subdir)
+            ? $"{fileBase}{ext}"
+            : $"{subdir.Replace('\\', '/')}/{fileBase}{ext}";
+        var pkginfoRel = string.IsNullOrEmpty(subdir)
+            ? $"{fileBase}.yaml"
+            : $"{subdir.Replace('\\', '/')}/{fileBase}.yaml";
+
+        ResolvedPathsText.Text =
+            $"pkginfo → pkgsinfo/{pkginfoRel}\ninstaller → pkgs/{installerRel}";
+
+        // Live preview: synthesize a Package + serialize. Hash is unknown until Save
+        // copies the file, so we placeholder it. Same for size — both are stamped on
+        // write.
+        var pkg = BuildPackageFromWizardState(installerRel, hash: "<computed on save>", size: 0);
+        YamlPreviewText.Text = Infrastructure.Yaml.PackageYamlSerializer.Serialize(pkg);
+    }
+
+    /// <summary>
+    /// Stitches the wizard's state into a <see cref="Package"/> ready for YAML
+    /// serialization. Inheritance from <c>_templateMatch</c> applies to fields
+    /// the wizard doesn't currently surface (Requires, UpdateFor, MinimumOsVersion,
+    /// etc.) so a template-driven import preserves them.
+    /// </summary>
+    private Package BuildPackageFromWizardState(string installerRelativeLocation, string hash, long size)
+    {
+        var m = _metadataBuffer!;
+        var pkg = new Package
+        {
+            Name = m.ID,
+            Version = m.Version,
+            Description = NullIfEmpty(m.Description),
+            Developer = NullIfEmpty(m.Developer),
+            Category = NullIfEmpty(m.Category),
+            Catalogs = [.. m.Catalogs],
+            SupportedArchitectures = m.SupportedArch.Count > 0 ? [.. m.SupportedArch] : null,
+            UnattendedInstall = m.UnattendedInstall,
+            UnattendedUninstall = m.UnattendedUninstall,
+            BlockingApplications = m.BlockingApps,
+            InstallerType = NullIfEmpty(m.InstallerType),
+            Installer = new CimianAdmin.Core.Models.Packages.Installer
+            {
+                Type = NullIfEmpty(m.InstallerType),
+                Location = installerRelativeLocation,
+                Hash = hash,
+                Size = size > 0 ? size : null,
+                ProductCode = NullIfEmpty(m.ProductCode),
+                UpgradeCode = NullIfEmpty(m.UpgradeCode),
+                IdentityName = NullIfEmpty(m.IdentityName),
+            },
+            PreinstallScript = _scripts["preinstall"],
+            PostinstallScript = _scripts["postinstall"],
+            PreuninstallScript = _scripts["preuninstall"],
+            PostuninstallScript = _scripts["postuninstall"],
+            InstallCheckScript = _scripts["installcheck"],
+            UninstallCheckScript = _scripts["uninstallcheck"],
+        };
+
+        // Inherit from the template for fields the wizard doesn't expose (yet).
+        if (_useTemplate && _templateMatch is not null)
+        {
+            pkg.Requires = _templateMatch.Requires is { Count: > 0 } req ? [.. req] : null;
+            pkg.UpdateFor = _templateMatch.UpdateFor is { Count: > 0 } uf ? [.. uf] : null;
+            pkg.MinimumOsVersion = _templateMatch.MinimumOsVersion;
+            pkg.MaximumOsVersion = _templateMatch.MaximumOsVersion;
+            pkg.MinimumCimianVersion = _templateMatch.MinimumCimianVersion;
+        }
+
+        return pkg;
+    }
+
+    /// <summary>
+    /// Performs the actual import: SHA-256 hashes the source installer, copies it
+    /// into <c>pkgs/&lt;subdir&gt;/</c>, then writes the pkginfo YAML via the
+    /// existing <see cref="IPackageService.CreatePackageAsync"/>. Surfaces a
+    /// success or failure InfoBar at the bottom of Step 4.
+    /// </summary>
+    private async Task SaveFromStep4Async()
+    {
+        if (_metadataBuffer is null || _repositoryService.CurrentRepository is not { } repo)
+        {
+            SaveStatusBar.Severity = InfoBarSeverity.Error;
+            SaveStatusBar.Title = "Save failed";
+            SaveStatusBar.Message = "No repository is open.";
+            SaveStatusBar.IsOpen = true;
+            return;
+        }
+
+        ContinueButton.IsEnabled = false;
+        BackButton.IsEnabled = false;
+
+        try
+        {
+            var subdir = (SubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\').Replace('/', Path.DirectorySeparatorChar);
+            var ext = Path.GetExtension(_sourceInstallerPath);
+            var fileBase = $"{_metadataBuffer.ID}-{_metadataBuffer.Version}";
+            var installerTarget = string.IsNullOrEmpty(subdir)
+                ? Path.Combine(repo.PkgsPath, $"{fileBase}{ext}")
+                : Path.Combine(repo.PkgsPath, subdir, $"{fileBase}{ext}");
+
+            Directory.CreateDirectory(Path.GetDirectoryName(installerTarget)!);
+
+            // Stream the file through SHA-256 while copying so we only read it once.
+            // Big installers (>200MB) would block the UI thread on Task.Run otherwise.
+            var (hash, size) = await Task.Run(() => CopyAndHash(_sourceInstallerPath, installerTarget)).ConfigureAwait(true);
+
+            var installerRel = Path.GetRelativePath(repo.PkgsPath, installerTarget).Replace('\\', '/');
+            var pkg = BuildPackageFromWizardState(installerRel, hash, size);
+
+            // Re-render the preview with the real hash/size before persisting.
+            YamlPreviewText.Text = Infrastructure.Yaml.PackageYamlSerializer.Serialize(pkg);
+
+            await _packageService.CreatePackageAsync(pkg, subdir.Replace(Path.DirectorySeparatorChar, '/')).ConfigureAwait(true);
+
+            SaveStatusBar.Severity = InfoBarSeverity.Success;
+            SaveStatusBar.Title = "Import complete";
+            SaveStatusBar.Message = $"Wrote pkginfo and copied installer for {pkg.Name} {pkg.Version}.";
+            SaveStatusBar.IsOpen = true;
+            ContinueButton.IsEnabled = false; // import already happened — no double-save
+        }
+        catch (Exception ex)
+        {
+            SaveStatusBar.Severity = InfoBarSeverity.Error;
+            SaveStatusBar.Title = "Save failed";
+            SaveStatusBar.Message = ex.Message;
+            SaveStatusBar.IsOpen = true;
+            ContinueButton.IsEnabled = true;
+        }
+        finally
+        {
+            BackButton.IsEnabled = true;
+        }
+    }
+
+    private static (string Hash, long Size) CopyAndHash(string source, string target)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        using var sourceStream = File.OpenRead(source);
+        using var targetStream = File.Create(target);
+        var buffer = new byte[81920];
+        long total = 0;
+        int read;
+        while ((read = sourceStream.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            targetStream.Write(buffer, 0, read);
+            sha.TransformBlock(buffer, 0, read, null, 0);
+            total += read;
+        }
+        sha.TransformFinalBlock([], 0, 0);
+        var hex = Convert.ToHexString(sha.Hash!).ToLowerInvariant();
+        return (hex, total);
+    }
 }

@@ -201,6 +201,51 @@
                             </StackPanel>
                         </StackPanel>
 
+                        <!-- Step 4: location + final review. -->
+                        <StackPanel x:Name="Step4Panel" Spacing="14" Visibility="Collapsed">
+                            <TextBlock Text="Location and review"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="The pkginfo and installer will be saved relative to the open repository. The preview below is the YAML that will be written."
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" />
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Repo subdirectory" Style="{StaticResource CaptionTextBlockStyle}" />
+                                <TextBox x:Name="SubdirBox"
+                                         PlaceholderText="apps/MyApp (leave blank for top-level)" />
+                                <TextBlock x:Name="ResolvedPathsText"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="pkginfo preview"
+                                           Style="{StaticResource CaptionTextBlockStyle}" />
+                                <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                        Padding="10"
+                                        MaxHeight="320">
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <TextBlock x:Name="YamlPreviewText"
+                                                   FontFamily="Cascadia Mono, Consolas"
+                                                   FontSize="12"
+                                                   TextWrapping="NoWrap"
+                                                   IsTextSelectionEnabled="True" />
+                                    </ScrollViewer>
+                                </Border>
+                            </StackPanel>
+
+                            <InfoBar x:Name="SaveStatusBar"
+                                     IsClosable="False"
+                                     IsOpen="False"
+                                     Severity="Informational" />
+                        </StackPanel>
+
                         <!-- Step 3: install / uninstall scripts. Pivot keeps the wizard
                              from getting overwhelmed by six full-size editors stacked. -->
                         <StackPanel x:Name="Step3Panel" Spacing="10" Visibility="Collapsed">

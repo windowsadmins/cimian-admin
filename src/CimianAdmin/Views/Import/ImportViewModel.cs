@@ -6,25 +6,49 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 /// <summary>
 /// Orchestrates the cimiimport-native Import wizard. Holds the queue of files
-/// the user dropped or picked; M3 extends this with per-file wizard state
-/// (current step, metadata buffer, prompter task-completions) and drives the
-/// underlying <c>Cimian.CLI.Cimiimport.Services.ImportService</c> via a
-/// WinUI-backed <c>IImportPrompter</c>.
+/// the user dropped or picked; the wizard drives per-file state for the
+/// in-progress import, while the queue here tracks the batch.
 /// </summary>
 public sealed partial class ImportViewModel : ObservableObject
 {
     private readonly IRepositoryService _repositoryService;
 
-    /// <summary>One entry in the import queue.</summary>
-    public sealed class QueueItem(string filePath)
+    /// <summary>
+    /// State of a single queue row. Drives the icon + text in the batch list.
+    /// </summary>
+    public enum QueueItemStatus
     {
-        public string FilePath { get; } = filePath;
-        public string FileName => System.IO.Path.GetFileName(FilePath);
-        /// <summary>Workflow state — currently just "pending"; M6 adds in-progress/done/error.</summary>
-        public string Status { get; set; } = "pending";
+        Pending,
+        InProgress,
+        Done,
+        Error,
     }
 
-    /// <summary>The queue, surfaced to the page for ListView binding when M6 lands.</summary>
+    /// <summary>
+    /// One entry in the import queue. Notifies on Status / StatusText so the
+    /// XAML can re-render the row without us rebuilding the whole list.
+    /// </summary>
+    public sealed partial class QueueItem : ObservableObject
+    {
+        public string FilePath { get; }
+        public string FileName => System.IO.Path.GetFileName(FilePath);
+
+        [ObservableProperty]
+        public partial QueueItemStatus Status { get; set; }
+
+        /// <summary>Human-readable status detail (e.g. error message, "Done", target path).</summary>
+        [ObservableProperty]
+        public partial string StatusText { get; set; }
+
+        public QueueItem(string filePath)
+        {
+            FilePath = filePath;
+            Status = QueueItemStatus.Pending;
+            StatusText = "Queued";
+        }
+    }
+
+    /// <summary>The queue, surfaced to the page for ListView binding.</summary>
     public ObservableCollection<QueueItem> Queue { get; } = [];
 
     public ImportViewModel(IRepositoryService repositoryService)

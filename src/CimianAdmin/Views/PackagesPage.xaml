@@ -7,7 +7,14 @@
     xmlns:nodes="using:CimianAdmin.Models"
     xmlns:local="using:CimianAdmin.Views">
 
-    <Grid Padding="16,12,16,16" ColumnSpacing="16">
+    <!-- Page-wide drag-drop. Dropping installer files anywhere on Packages
+         routes them straight into the Import wizard so users don't have to
+         switch tabs first. -->
+    <Grid Padding="16,12,16,16"
+          ColumnSpacing="16"
+          AllowDrop="True"
+          DragOver="OnInstallerDragOver"
+          Drop="OnInstallerDrop">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="380" />
             <ColumnDefinition Width="*" />

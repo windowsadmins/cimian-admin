@@ -91,20 +91,24 @@ public sealed partial class MainWindow : Window
     private async void OnSaveAllClicked(object sender, RoutedEventArgs e)
     {
         SaveAllButton.IsEnabled = false;
+        var savedCount = 0;
+        var failures = new List<(string Path, string Reason)>();
         try
         {
             // Snapshot so we can iterate without worrying about the underlying
-            // set mutating as MarkClean fires Changed events back at us.
+            // set mutating as MarkClean fires Changed events back at us. Each
+            // save is independent — one failure must not abort the rest.
             foreach (var pkg in _sessionState.DirtyPackages)
             {
                 try
                 {
                     await _packageService.SavePackageAsync(pkg).ConfigureAwait(true);
                     _sessionState.MarkPackageClean(pkg);
+                    savedCount++;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Leave it dirty so the user can retry; don't abort the rest.
+                    failures.Add((pkg.FilePath ?? pkg.Name ?? "(unknown package)", ex.Message));
                 }
             }
             foreach (var mf in _sessionState.DirtyManifests)
@@ -113,9 +117,11 @@ public sealed partial class MainWindow : Window
                 {
                     await _manifestService.SaveManifestAsync(mf).ConfigureAwait(true);
                     _sessionState.MarkManifestClean(mf);
+                    savedCount++;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    failures.Add((mf.FilePath ?? mf.Name ?? "(unknown manifest)", ex.Message));
                 }
             }
         }
@@ -124,6 +130,34 @@ public sealed partial class MainWindow : Window
             SaveAllButton.IsEnabled = true;
             UpdateSaveAllButton();
         }
+
+        if (failures.Count > 0)
+        {
+            await ShowSaveAllFailuresAsync(savedCount, failures).ConfigureAwait(true);
+        }
+    }
+
+    private async Task ShowSaveAllFailuresAsync(int savedCount, List<(string Path, string Reason)> failures)
+    {
+        // Cap detail to ~5 entries so the dialog stays scannable; the unfailed
+        // ones remain marked dirty in session state for retry.
+        var detail = string.Join(
+            Environment.NewLine,
+            failures.Take(5).Select(f => $"• {f.Path} — {f.Reason}"));
+        if (failures.Count > 5)
+        {
+            detail += $"{Environment.NewLine}…and {failures.Count - 5} more.";
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = $"Save all: {savedCount} saved, {failures.Count} failed",
+            Content = $"These items remain dirty and can be retried:{Environment.NewLine}{Environment.NewLine}{detail}",
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+        };
+        await dialog.ShowAsync();
     }
 
     /// <summary>

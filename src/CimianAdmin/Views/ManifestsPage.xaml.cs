@@ -73,6 +73,28 @@ public sealed partial class ManifestsPage : Page
         }
     }
 
+    private async void OnFindClicked(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ManifestSearchDialog(ViewModel.SmartPredicate)
+        {
+            XamlRoot = XamlRoot,
+        };
+        await dialog.ShowAsync();
+        if (dialog.Result is { } predicate)
+        {
+            ViewModel.SmartPredicate = predicate.IsEmpty ? null : predicate;
+            UpdateFindButtonLabel();
+        }
+    }
+
+    private void UpdateFindButtonLabel()
+    {
+        var n = ViewModel.SmartPredicate?.Rules.Count ?? 0;
+        FindButtonText.Text = n == 0
+            ? "Find"
+            : string.Format(CultureInfo.InvariantCulture, "Find ({0})", n);
+    }
+
     /// <summary>Apply any pending cross-page selection.</summary>
     public void SelectPending()
     {

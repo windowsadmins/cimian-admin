@@ -2,6 +2,7 @@ namespace CimianAdmin.ViewModels;
 
 using System.Collections.ObjectModel;
 using CimianAdmin.Core.Models.Manifests;
+using CimianAdmin.Core.Models.Search;
 using CimianAdmin.Core.Services;
 using CimianAdmin.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -61,6 +62,10 @@ public sealed partial class ManifestsViewModel : ObservableObject
     [ObservableProperty]
     public partial ManifestsSortBy SortBy { get; set; } = ManifestsSortBy.Name;
 
+    /// <summary>Optional criteria predicate from the "Find manifests" dialog.</summary>
+    [ObservableProperty]
+    public partial ManifestSearchPredicate? SmartPredicate { get; set; }
+
     public ManifestsViewModel(IManifestService manifestService, IRepositoryService repositoryService)
     {
         ArgumentNullException.ThrowIfNull(manifestService);
@@ -105,6 +110,7 @@ public sealed partial class ManifestsViewModel : ObservableObject
     partial void OnCatalogFilterChanged(string value) => ApplyFilter();
     partial void OnGroupByChanged(ManifestsGroupBy value) => ApplyFilter();
     partial void OnSortByChanged(ManifestsSortBy value) => ApplyFilter();
+    partial void OnSmartPredicateChanged(ManifestSearchPredicate? value) => ApplyFilter();
 
     private void ApplyFilter()
     {
@@ -125,6 +131,11 @@ public sealed partial class ManifestsViewModel : ObservableObject
             filtered = filtered.Where(m =>
                 m.Catalogs is { Count: > 0 }
                 && m.Catalogs.Any(c => string.Equals(c, catalog, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (SmartPredicate is { } pred && !pred.IsEmpty)
+        {
+            filtered = filtered.Where(m => ManifestSmartFilter.Matches(m, pred));
         }
 
         var list = filtered.ToList();

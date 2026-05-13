@@ -23,6 +23,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -31,20 +32,42 @@
                 Grid.Row="1"
                 PlaceholderText="Search manifests"
                 Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <Grid Grid.Row="2" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ComboBox Grid.Column="0"
+                          x:Name="GroupByCombo"
+                          HorizontalAlignment="Stretch"
+                          SelectionChanged="OnGroupByChanged">
+                    <ComboBoxItem Content="By directory" Tag="Directories" />
+                    <ComboBoxItem Content="By catalog" Tag="Catalogs" />
+                    <ComboBoxItem Content="All manifests" Tag="None" />
+                </ComboBox>
+                <ComboBox Grid.Column="1"
+                          x:Name="SortByCombo"
+                          HorizontalAlignment="Stretch"
+                          SelectionChanged="OnSortByChanged">
+                    <ComboBoxItem Content="Sort: Name" Tag="Name" />
+                    <ComboBoxItem Content="Sort: Recently modified" Tag="RecentlyModified" />
+                    <ComboBoxItem Content="Sort: Recently created" Tag="RecentlyCreated" />
+                </ComboBox>
+            </Grid>
             <ComboBox
-                Grid.Row="2"
+                Grid.Row="3"
                 x:Name="CatalogFilterBox"
                 PlaceholderText="Filter by catalog"
                 HorizontalAlignment="Stretch"
                 SelectionChanged="OnCatalogFilterChanged" />
             <TextBlock
-                Grid.Row="3"
+                Grid.Row="4"
                 x:Name="CountText"
                 Style="{StaticResource CaptionTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
             <muxc:TreeView
-                Grid.Row="4"
+                Grid.Row="5"
                 x:Name="ManifestTree"
                 ItemsSource="{x:Bind ViewModel.RootNodes, Mode=OneWay}"
                 ItemInvoked="OnNodeInvoked"

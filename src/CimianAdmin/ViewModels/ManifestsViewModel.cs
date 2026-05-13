@@ -6,6 +6,24 @@ using CimianAdmin.Core.Services;
 using CimianAdmin.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
+/// <summary>How the Manifests tree is partitioned.</summary>
+public enum ManifestsGroupBy
+{
+    /// <summary>Folder hierarchy derived from manifest name slashes (default).</summary>
+    Directories,
+    /// <summary>One bucket per catalog the manifest declares.</summary>
+    Catalogs,
+    /// <summary>Flat list, no grouping.</summary>
+    None,
+}
+
+public enum ManifestsSortBy
+{
+    Name,
+    RecentlyModified,
+    RecentlyCreated,
+}
+
 public sealed partial class ManifestsViewModel : ObservableObject
 {
     private readonly IManifestService _manifestService;
@@ -36,6 +54,12 @@ public sealed partial class ManifestsViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string? ErrorMessage { get; set; }
+
+    [ObservableProperty]
+    public partial ManifestsGroupBy GroupBy { get; set; } = ManifestsGroupBy.Directories;
+
+    [ObservableProperty]
+    public partial ManifestsSortBy SortBy { get; set; } = ManifestsSortBy.Name;
 
     public ManifestsViewModel(IManifestService manifestService, IRepositoryService repositoryService)
     {
@@ -79,6 +103,8 @@ public sealed partial class ManifestsViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
     partial void OnCatalogFilterChanged(string value) => ApplyFilter();
+    partial void OnGroupByChanged(ManifestsGroupBy value) => ApplyFilter();
+    partial void OnSortByChanged(ManifestsSortBy value) => ApplyFilter();
 
     private void ApplyFilter()
     {
@@ -103,8 +129,115 @@ public sealed partial class ManifestsViewModel : ObservableObject
 
         var list = filtered.ToList();
         Manifests = [.. list];
-        RootNodes = [.. BuildTree(list, expandAll: hasSearch)];
+        RootNodes = GroupBy switch
+        {
+            ManifestsGroupBy.Catalogs => [.. BuildCatalogTree(list, SortBy, hasSearch)],
+            ManifestsGroupBy.None => [.. BuildFlatTree(list, SortBy)],
+            _ => [.. ReorderDirectoryTree(BuildTree(list, expandAll: hasSearch), SortBy)],
+        };
     }
+
+    /// <summary>
+    /// Walks the directory tree and reorders leaves at every level by the chosen
+    /// sort. Folders-first is preserved; only the leaf order changes. For Name
+    /// sort this is a no-op since BuildTree already sorts that way.
+    /// </summary>
+    private static List<ManifestTreeNode> ReorderDirectoryTree(List<ManifestTreeNode> roots, ManifestsSortBy sortBy)
+    {
+        if (sortBy == ManifestsSortBy.Name) return roots;
+        foreach (var root in roots) ReorderNode(root, sortBy);
+        return roots;
+    }
+
+    private static void ReorderNode(ManifestTreeNode node, ManifestsSortBy sortBy)
+    {
+        if (node.Children.Count > 1)
+        {
+            var folders = node.Children.Where(c => c.Children.Count > 0).ToList();
+            var leaves = node.Children.Where(c => c.Children.Count == 0).ToList();
+            var orderedLeaves = ApplySortNodes(leaves, sortBy);
+            node.Children.Clear();
+            foreach (var f in folders) node.Children.Add(f);
+            foreach (var l in orderedLeaves) node.Children.Add(l);
+        }
+        foreach (var child in node.Children) ReorderNode(child, sortBy);
+    }
+
+    private static IEnumerable<ManifestTreeNode> ApplySortNodes(IEnumerable<ManifestTreeNode> nodes, ManifestsSortBy sortBy) => sortBy switch
+    {
+        ManifestsSortBy.RecentlyModified => nodes.OrderByDescending(n => n.Manifest?.LastModified ?? DateTime.MinValue),
+        ManifestsSortBy.RecentlyCreated => nodes.OrderByDescending(n => n.Manifest?.Created ?? DateTime.MinValue),
+        _ => nodes.OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase),
+    };
+
+    private static List<ManifestTreeNode> BuildFlatTree(IEnumerable<Manifest> manifests, ManifestsSortBy sortBy)
+    {
+        var all = new ManifestTreeNode { Name = "All manifests", FullPath = string.Empty, IsExpanded = true };
+        foreach (var m in ApplySortManifests(manifests, sortBy))
+        {
+            all.Children.Add(new ManifestTreeNode
+            {
+                Name = m.Name ?? string.Empty,
+                FullPath = m.Name ?? string.Empty,
+                Manifest = m,
+            });
+        }
+        return [all];
+    }
+
+    private static List<ManifestTreeNode> BuildCatalogTree(IEnumerable<Manifest> manifests, ManifestsSortBy sortBy, bool expandAll)
+    {
+        const string sentinel = "￿sentinel";
+        var buckets = new SortedDictionary<string, List<Manifest>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var m in manifests)
+        {
+            if (m.Catalogs is { Count: > 0 } cs)
+            {
+                foreach (var c in cs)
+                {
+                    if (string.IsNullOrWhiteSpace(c)) continue;
+                    var key = c.Trim();
+                    if (!buckets.TryGetValue(key, out var bucket)) buckets[key] = bucket = [];
+                    bucket.Add(m);
+                }
+            }
+            else
+            {
+                if (!buckets.TryGetValue(sentinel, out var bucket)) buckets[sentinel] = bucket = [];
+                bucket.Add(m);
+            }
+        }
+
+        var roots = new List<ManifestTreeNode>(buckets.Count);
+        IEnumerable<KeyValuePair<string, List<Manifest>>> ordered = buckets
+            .Where(kv => !string.Equals(kv.Key, sentinel, StringComparison.Ordinal))
+            .Concat(buckets.Where(kv => string.Equals(kv.Key, sentinel, StringComparison.Ordinal)));
+
+        foreach (var (key, list) in ordered)
+        {
+            var label = string.Equals(key, sentinel, StringComparison.Ordinal) ? "(No catalogs)" : key;
+            var node = new ManifestTreeNode { Name = label, FullPath = string.Empty, IsExpanded = expandAll };
+            foreach (var m in ApplySortManifests(list, sortBy))
+            {
+                node.Children.Add(new ManifestTreeNode
+                {
+                    Name = m.Name ?? string.Empty,
+                    FullPath = m.Name ?? string.Empty,
+                    Manifest = m,
+                });
+            }
+            roots.Add(node);
+        }
+        return roots;
+    }
+
+    private static IEnumerable<Manifest> ApplySortManifests(IEnumerable<Manifest> source, ManifestsSortBy sortBy) => sortBy switch
+    {
+        ManifestsSortBy.RecentlyModified => source.OrderByDescending(m => m.LastModified ?? DateTime.MinValue),
+        ManifestsSortBy.RecentlyCreated => source.OrderByDescending(m => m.Created ?? DateTime.MinValue),
+        _ => source.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase),
+    };
 
     /// <summary>Distinct catalog names referenced by any manifest, in preferred order.</summary>
     public List<string> GetKnownCatalogNames()

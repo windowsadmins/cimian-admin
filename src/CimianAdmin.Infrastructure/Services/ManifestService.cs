@@ -156,6 +156,7 @@ public sealed class ManifestService : IManifestService
 
             manifest.FilePath = filePath;
             manifest.LastModified = File.GetLastWriteTimeUtc(filePath);
+            manifest.Created = File.GetCreationTimeUtc(filePath);
             manifest.Name = DeriveManifestName(filePath, manifestsRoot);
             return manifest;
         }
@@ -191,6 +192,7 @@ public sealed class ManifestService : IManifestService
         await File.WriteAllTextAsync(filePath, yaml, cancellationToken).ConfigureAwait(false);
         manifest.FilePath = filePath;
         manifest.LastModified = File.GetLastWriteTimeUtc(filePath);
+        manifest.Created = File.GetCreationTimeUtc(filePath);
     }
 
     private static bool ManifestReferencesPackage(Manifest manifest, string packageName)

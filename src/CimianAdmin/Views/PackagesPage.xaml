@@ -29,22 +29,76 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0" Text="Packages" Style="{StaticResource SubtitleTextBlockStyle}" />
-            <TextBox
-                Grid.Row="1"
-                PlaceholderText="Search packages"
-                Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <!-- Search box on the left fills available width; "Find" button on the right
+                 opens the smart-search dialog (attribute · operator · value rules). -->
+            <Grid Grid.Row="1" ColumnSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         PlaceholderText="Search packages"
+                         Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <Button Grid.Column="1"
+                        x:Name="FindButton"
+                        Click="OnFindClicked"
+                        Padding="8,4">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Viewbox Width="14" Height="14">
+                            <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                                  Stroke="{ThemeResource TextFillColorSecondaryBrush}"
+                                  Data="M22,3 H2 L10,12.46 V19 L14,21 V12.46 Z" />
+                        </Viewbox>
+                        <TextBlock x:Name="FindButtonText"
+                                   Text="Find"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ToolTipService.ToolTip>
+                        <TextBlock Text="Build a criteria search (attribute · operator · value)" />
+                    </ToolTipService.ToolTip>
+                </Button>
+            </Grid>
+            <!-- Group / sort selectors. Group changes the buckets at the top level;
+                 sort orders the leaves within each bucket. Code-behind owns the
+                 selection bridge so the ComboBox SelectedIndex maps to the enum. -->
+            <Grid Grid.Row="2" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ComboBox Grid.Column="0"
+                          x:Name="GroupByCombo"
+                          HorizontalAlignment="Stretch"
+                          SelectionChanged="OnGroupByChanged">
+                    <ComboBoxItem Content="By category" Tag="Categories" />
+                    <ComboBoxItem Content="By developer" Tag="Developers" />
+                    <ComboBoxItem Content="By directory" Tag="Directories" />
+                    <ComboBoxItem Content="By type" Tag="Types" />
+                    <ComboBoxItem Content="All packages" Tag="None" />
+                </ComboBox>
+                <ComboBox Grid.Column="1"
+                          x:Name="SortByCombo"
+                          HorizontalAlignment="Stretch"
+                          SelectionChanged="OnSortByChanged">
+                    <ComboBoxItem Content="Sort: Name" Tag="Name" />
+                    <ComboBoxItem Content="Sort: Recently modified" Tag="RecentlyModified" />
+                    <ComboBoxItem Content="Sort: Recently created" Tag="RecentlyCreated" />
+                </ComboBox>
+            </Grid>
             <TextBlock
-                Grid.Row="2"
+                Grid.Row="3"
                 x:Name="CountText"
                 Style="{StaticResource CaptionTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
             <muxc:TreeView
-                Grid.Row="3"
+                Grid.Row="4"
                 x:Name="PackagesTree"
                 ItemsSource="{x:Bind ViewModel.RootNodes, Mode=OneWay}"
                 ItemInvoked="OnNodeInvoked"

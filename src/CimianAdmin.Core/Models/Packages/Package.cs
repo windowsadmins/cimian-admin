@@ -157,6 +157,16 @@ public sealed class Package
     [YamlIgnore]
     public DateTime? LastModified { get; set; }
 
+    /// <summary>
+    /// Filesystem creation time (UTC) of this pkginfo file in the current working
+    /// copy. Note this is NOT a repo-history value — a fresh git clone, copy, or
+    /// branch checkout will reset it to "now", so don't use it to reason about
+    /// when the pkginfo was first authored. On FAT-like filesystems it may match
+    /// LastModified.
+    /// </summary>
+    [YamlIgnore]
+    public DateTime? Created { get; set; }
+
     /// <summary>Display name if set, otherwise the package name.</summary>
     [YamlIgnore]
     public string EffectiveDisplayName => string.IsNullOrWhiteSpace(DisplayName) ? Name : DisplayName!;

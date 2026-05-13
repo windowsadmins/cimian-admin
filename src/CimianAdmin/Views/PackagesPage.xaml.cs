@@ -34,9 +34,71 @@ public sealed partial class PackagesPage : Page
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // Sync ComboBoxes from VM defaults before user interaction so the
+        // SelectionChanged handlers see correct state on first fire.
+        SyncGroupSortCombosFromViewModel();
         await ViewModel.LoadAsync().ConfigureAwait(true);
         UpdateCount();
         SelectPending();
+    }
+
+    private void SyncGroupSortCombosFromViewModel()
+    {
+        GroupByCombo.SelectedIndex = ViewModel.GroupBy switch
+        {
+            PackagesGroupBy.Categories => 0,
+            PackagesGroupBy.Developers => 1,
+            PackagesGroupBy.Directories => 2,
+            PackagesGroupBy.Types => 3,
+            _ => 4,
+        };
+        SortByCombo.SelectedIndex = ViewModel.SortBy switch
+        {
+            PackagesSortBy.Name => 0,
+            PackagesSortBy.RecentlyModified => 1,
+            _ => 2,
+        };
+    }
+
+    private void OnGroupByChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (GroupByCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && Enum.TryParse<PackagesGroupBy>(tag, out var g))
+        {
+            ViewModel.GroupBy = g;
+        }
+    }
+
+    private void OnSortByChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SortByCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag
+            && Enum.TryParse<PackagesSortBy>(tag, out var s))
+        {
+            ViewModel.SortBy = s;
+        }
+    }
+
+    private async void OnFindClicked(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SmartSearchDialog(ViewModel.SmartPredicate)
+        {
+            XamlRoot = XamlRoot,
+        };
+        await dialog.ShowAsync();
+        if (dialog.Result is { } predicate)
+        {
+            ViewModel.SmartPredicate = predicate.IsEmpty ? null : predicate;
+            UpdateFindButtonLabel();
+        }
+    }
+
+    /// <summary>Reflects active filter count on the Find button so it's visible at a glance.</summary>
+    private void UpdateFindButtonLabel()
+    {
+        var n = ViewModel.SmartPredicate?.Rules.Count ?? 0;
+        FindButtonText.Text = n == 0
+            ? "Find"
+            : string.Format(CultureInfo.InvariantCulture, "Find ({0})", n);
     }
 
     /// <summary>Apply any pending cross-page selection (set by NavigateToPackage or back/forward).</summary>

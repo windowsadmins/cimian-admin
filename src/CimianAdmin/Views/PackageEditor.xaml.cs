@@ -13,6 +13,7 @@ public sealed partial class PackageEditor : UserControl
     private readonly ICatalogService _catalogService;
     private readonly IGitService _gitService;
     private readonly IRepositoryService _repositoryService;
+    private readonly ISessionState _sessionState;
     private Package? _package;
     private bool _suppressDirty;
     private IReadOnlyList<string> _knownCatalogs = [];
@@ -27,7 +28,8 @@ public sealed partial class PackageEditor : UserControl
             App.Resolve<IPackageService>(),
             App.Resolve<ICatalogService>(),
             App.Resolve<IGitService>(),
-            App.Resolve<IRepositoryService>())
+            App.Resolve<IRepositoryService>(),
+            App.Resolve<ISessionState>())
     {
     }
 
@@ -35,17 +37,41 @@ public sealed partial class PackageEditor : UserControl
         IPackageService packageService,
         ICatalogService catalogService,
         IGitService gitService,
-        IRepositoryService repositoryService)
+        IRepositoryService repositoryService,
+        ISessionState sessionState)
     {
         ArgumentNullException.ThrowIfNull(packageService);
         ArgumentNullException.ThrowIfNull(catalogService);
         ArgumentNullException.ThrowIfNull(gitService);
         ArgumentNullException.ThrowIfNull(repositoryService);
+        ArgumentNullException.ThrowIfNull(sessionState);
         _packageService = packageService;
         _catalogService = catalogService;
         _gitService = gitService;
         _repositoryService = repositoryService;
+        _sessionState = sessionState;
         InitializeComponent();
+        _sessionState.Changed += OnSessionStateChanged;
+        Unloaded += (_, _) => _sessionState.Changed -= OnSessionStateChanged;
+    }
+
+    private void OnSessionStateChanged(object? sender, EventArgs e)
+    {
+        // If the global "Save all" flushed our current package, drop our local
+        // dirty visuals — the model is now clean on disk too. Conversely if
+        // something marked it dirty externally, reflect that.
+        if (_package is null) return;
+        var sessionDirty = _sessionState.IsPackageDirty(_package);
+        if (sessionDirty != IsDirty)
+        {
+            IsDirty = sessionDirty;
+            if (!sessionDirty)
+            {
+                // Re-read so any model-side normalization done during save is
+                // visible. Cheap because Populate is local-only.
+                Populate(_package);
+            }
+        }
     }
 
     public bool IsDirty
@@ -62,6 +88,16 @@ public sealed partial class PackageEditor : UserControl
 
     public async void SetPackage(Package? package)
     {
+        // Session-scoped auto-save: if the previously-shown package has unsaved
+        // edits, flush them onto the model reference before switching. The
+        // ViewModel holds the same reference so the change persists in memory;
+        // the global "Save all" command commits everything to disk later.
+        if (_package is not null && IsDirty)
+        {
+            ApplyEditsTo(_package);
+            _sessionState.MarkPackageDirty(_package);
+        }
+
         _package = package;
 
         if (package is null)
@@ -106,7 +142,9 @@ public sealed partial class PackageEditor : UserControl
         ManagedProfilesPicker.Suggestions = [];
 
         Populate(package);
-        IsDirty = false;
+        // Re-open with the dirty flag the session remembers, so navigating away
+        // and back shows the pending-edits indicator and an enabled Save button.
+        IsDirty = _sessionState.IsPackageDirty(package);
         StatusBar.IsOpen = false;
         await RefreshDiskChangedAsync(package).ConfigureAwait(true);
     }
@@ -138,6 +176,7 @@ public sealed partial class PackageEditor : UserControl
             DisplayNameText.Text = package.EffectiveDisplayName;
             VersionText.Text = string.IsNullOrEmpty(package.Version) ? string.Empty : "Version " + package.Version;
             FilePathText.Text = ToRepoRelativePath(package.FilePath);
+            TimestampsText.Text = TimestampFormatter.FormatCreatedModified(package.Created, package.LastModified);
 
             NameField.Text = package.Name;
             DisplayNameField.Text = package.DisplayName ?? string.Empty;
@@ -554,6 +593,7 @@ public sealed partial class PackageEditor : UserControl
             return;
         }
         IsDirty = true;
+        if (_package is not null) _sessionState.MarkPackageDirty(_package);
     }
 
     private async void OnSaveClicked(object sender, RoutedEventArgs e)
@@ -568,6 +608,7 @@ public sealed partial class PackageEditor : UserControl
         try
         {
             await _packageService.SavePackageAsync(_package).ConfigureAwait(true);
+            _sessionState.MarkPackageClean(_package);
             IsDirty = false;
             ShowStatus(InfoBarSeverity.Success, "Saved", $"Wrote {_package.FilePath}");
         }
@@ -583,7 +624,11 @@ public sealed partial class PackageEditor : UserControl
         {
             return;
         }
+        // Revert is a hard reset to the in-memory model — session state must
+        // also drop this package's dirty flag, otherwise "Save all" would still
+        // write the (now-discarded) edits.
         Populate(_package);
+        _sessionState.MarkPackageClean(_package);
         IsDirty = false;
         StatusBar.IsOpen = false;
     }
@@ -614,6 +659,7 @@ public sealed partial class PackageEditor : UserControl
         try
         {
             await _packageService.DeletePackageAsync(_package, deleteInstaller: false).ConfigureAwait(true);
+            _sessionState.MarkPackageClean(_package);
             _package = null;
             EditorRoot.Visibility = Visibility.Collapsed;
             EmptyState.Visibility = Visibility.Visible;

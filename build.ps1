@@ -38,17 +38,52 @@
 .PARAMETER Run
     Launch CimianAdmin.exe after a successful (signed) build.
 
+.PARAMETER Release
+    Run the full release pipeline locally: `dotnet publish` per arch (x64 +
+    arm64 by default), sign binaries, run cimipkg to produce MSI + nupkg,
+    sign the MSI, and drop everything in ./release/. CI ships unsigned
+    artifacts because hosted runners can't access the enterprise cert — this
+    mode is how we produce the signed install media for actual deployment.
+
+.PARAMETER Upload
+    After `-Release`, push the signed artifacts to a GitHub release tag,
+    replacing any unsigned files of the same name (gh release upload
+    --clobber). Requires the gh CLI and contents:write on the repo.
+
+.PARAMETER Version
+    Version string baked into the build and used in artifact filenames.
+    Defaults to yyyy.M.d. Must be a valid System.Version (no extra tokens).
+
+.PARAMETER Install
+    After `-Release`, msiexec /i the freshly-signed MSI for the current
+    architecture. Triggers a UAC prompt. Useful for fast install-and-test
+    loops; do NOT use against a production host.
+
 .EXAMPLE
     .\build.ps1
-    Build + sign for Debug/x64.
+    Build + sign for Debug/x64 (dev iteration).
 
 .EXAMPLE
     .\build.ps1 -Run
     Build + sign + launch.
 
 .EXAMPLE
+    .\build.ps1 -Release
+    Full local release pipeline: publish + sign binaries + cimipkg + sign MSI
+    for x64 and arm64. Outputs to ./release/.
+
+.EXAMPLE
+    .\build.ps1 -Release -Architecture x64 -Install
+    Build a signed x64 MSI and install it on this machine for testing.
+
+.EXAMPLE
+    .\build.ps1 -Release -Upload v0.3.0
+    Build signed artifacts and push them to the v0.3.0 GitHub release,
+    replacing the unsigned ones CI uploaded.
+
+.EXAMPLE
     .\build.ps1 -Configuration Release -Architecture arm64 -Clean
-    Clean Release ARM64 build with signing.
+    Clean Release ARM64 dev build with signing (no packaging).
 
 .EXAMPLE
     $env:CIMIAN_CERT_SUBJECT = 'YourOrgName'; .\build.ps1
@@ -73,10 +108,23 @@ param(
 
     [switch]$Clean,
 
-    [switch]$Run
+    [switch]$Run,
+
+    [switch]$Release,
+
+    [string]$Upload,
+
+    [string]$Version,
+
+    [switch]$Install
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Capture which params the caller actually passed before any function rewrites
+# its own $PSBoundParameters. Used by Invoke-Release to decide whether
+# -Architecture means "this arch only" (explicit) or "fall back to defaults".
+$script:ScriptBoundParameters = $PSBoundParameters
 
 # --- Configuration ---------------------------------------------------------
 
@@ -372,9 +420,227 @@ function Invoke-Build {
     Write-BuildLog "Built: $exePath" 'SUCCESS'
 }
 
+# --- Release pipeline (publish + sign + cimipkg + sign MSI) ----------------
+
+function Resolve-ReleaseVersion {
+    if ($Version) {
+        # Validate so cimipkg / MSI Property[ProductVersion] don't choke on a
+        # malformed string later. yyyy.M.d.HHmm and yyyy.M.d both parse.
+        try { [void][System.Version]::Parse($Version) }
+        catch { throw "Invalid -Version '$Version' — must be a valid System.Version (e.g. 2026.5.13 or 1.2.3)." }
+        return $Version
+    }
+    if ($env:CIMIAN_VERSION) { return $env:CIMIAN_VERSION }
+    return Get-Date -Format 'yyyy.M.d'
+}
+
+function Get-CimipkgPath {
+    # Try sibling CimianTools repo first (devs working on both have it built).
+    $sibling = Join-Path $repoRoot '..\CimianTools\release\x64\cimipkg.exe'
+    if (Test-Path $sibling) { return (Resolve-Path $sibling).Path }
+
+    $sibling = Join-Path $repoRoot '..\CimianTools\release\arm64\cimipkg.exe'
+    if (Test-Path $sibling) { return (Resolve-Path $sibling).Path }
+
+    # Then PATH.
+    $onPath = Get-Command cimipkg.exe -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+
+    # Last resort: pull the latest release of windowsadmins/cimian-pkg.
+    $toolsDir = Join-Path $repoRoot '.tools'
+    $local = Join-Path $toolsDir 'cimipkg.exe'
+    if (Test-Path $local) { return $local }
+
+    Write-BuildLog 'cimipkg.exe not found locally; downloading from windowsadmins/cimian-pkg release'
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        throw 'cimipkg.exe not found and gh CLI is unavailable. Install cimipkg or gh and retry.'
+    }
+    New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
+    # Prefer zipped distribution if present, else direct exe.
+    & gh release download --repo windowsadmins/cimian-pkg --pattern 'cimipkg-win-x64.zip' --dir $toolsDir 2>$null
+    $zip = Join-Path $toolsDir 'cimipkg-win-x64.zip'
+    if (Test-Path $zip) {
+        Expand-Archive -Path $zip -DestinationPath $toolsDir -Force
+        Remove-Item $zip -Force -ErrorAction SilentlyContinue
+    } else {
+        & gh release download --repo windowsadmins/cimian-pkg --pattern 'cimipkg.exe' --dir $toolsDir
+    }
+    if (-not (Test-Path $local)) {
+        throw 'Failed to download cimipkg.exe'
+    }
+    return $local
+}
+
+function Invoke-ReleaseForArch {
+    param(
+        [Parameter(Mandatory)][string]$Arch,
+        [Parameter(Mandatory)][string]$ReleaseVersion,
+        [Parameter(Mandatory)][string]$CimipkgExe,
+        [string]$SignThumbprint,
+        [string]$SignStore = 'CurrentUser'
+    )
+
+    $rid = "win-$Arch"
+    $publishDir = Join-Path $repoRoot "publish\$Arch"
+    $stagingDir = Join-Path $repoRoot "staging-$Arch"
+    $releaseDir = Join-Path $repoRoot 'release'
+
+    if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
+    if (Test-Path $stagingDir) { Remove-Item $stagingDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
+    New-Item -ItemType Directory -Path "$stagingDir\payload" -Force | Out-Null
+    New-Item -ItemType Directory -Path "$stagingDir\scripts" -Force | Out-Null
+
+    # 1. dotnet publish — self-contained so the MSI doesn't depend on a
+    # specific runtime install order on the target.
+    Write-BuildLog "Publishing $Arch ($rid)..."
+    & dotnet publish $csproj `
+        -c Release -r $rid `
+        -p:Platform=$($Arch.ToUpper()) `
+        -p:Version=$ReleaseVersion `
+        -p:WindowsAppSDKSelfContained=true `
+        -p:SelfContained=true `
+        -o $publishDir
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $Arch" }
+
+    # 2. Sign all CimianAdmin-shipped binaries in the publish tree. We
+    # deliberately leave Microsoft.* / Windows App SDK runtime DLLs alone —
+    # those are already MS-signed and re-signing them invalidates that.
+    if ($SignThumbprint) {
+        $bins = Get-ChildItem -Path $publishDir -Include 'CimianAdmin.exe', 'CimianAdmin*.dll', 'Cimian.*.dll', 'CimianAdmin.Core.dll', 'CimianAdmin.Infrastructure.dll', 'CimianAdmin.Shared.dll' -Recurse -File |
+            Select-Object -ExpandProperty FullName
+        if ($bins.Count -gt 0) {
+            Invoke-SignArtifacts -Paths $bins -Thumbprint $SignThumbprint -Store $SignStore
+        } else {
+            Write-BuildLog "No CimianAdmin binaries matched the sign filter — check publish output." 'WARNING'
+        }
+    }
+
+    # 3. Stage payload + build-info + scripts for cimipkg.
+    Copy-Item "$publishDir\*" "$stagingDir\payload\" -Recurse -Force
+    (Get-Content (Join-Path $repoRoot 'build-info.yaml') -Raw) `
+        -replace '\$\{TIMESTAMP\}', $ReleaseVersion `
+        -replace '\$\{ARCH\}', $Arch `
+        -replace '(?m)^\s*signing_certificate:.*\r?\n', '' |
+        Set-Content "$stagingDir\build-info.yaml" -Encoding UTF8
+    Copy-Item (Join-Path $repoRoot 'scripts\*.ps1') "$stagingDir\scripts\" -Force
+
+    # 4. cimipkg → MSI.
+    Write-BuildLog "Running cimipkg for $Arch MSI..."
+    & $CimipkgExe --verbose $stagingDir | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "cimipkg MSI build failed for $Arch" }
+    $msi = Get-ChildItem "$stagingDir\build\*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $msi) { throw "MSI output not found for $Arch" }
+    $msiDest = Join-Path $releaseDir "CimianAdmin-$Arch-$ReleaseVersion.msi"
+    Move-Item $msi.FullName $msiDest -Force
+
+    # 5. Sign the MSI itself so SmartScreen / GPO trust it as a unit.
+    if ($SignThumbprint) {
+        Invoke-SignArtifacts -Paths @($msiDest) -Thumbprint $SignThumbprint -Store $SignStore
+    }
+
+    # 6. cimipkg → nupkg (Chocolatey-compatible). nupkgs aren't traditionally
+    # Authenticode-signed; nuget sign needs a different cert chain so we leave
+    # them as-is.
+    Write-BuildLog "Running cimipkg for $Arch nupkg..."
+    & $CimipkgExe --nupkg --verbose $stagingDir | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-BuildLog "nupkg build failed for $Arch (non-fatal)" 'WARNING'
+    } else {
+        $nupkg = Get-ChildItem "$stagingDir\build\*.nupkg" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($nupkg) {
+            Move-Item $nupkg.FullName (Join-Path $releaseDir "CimianAdmin-$Arch-$ReleaseVersion.nupkg") -Force
+        }
+    }
+
+    # 7. Raw publish zip — mirrors what the CI release.yml uploads.
+    Compress-Archive -Path "$publishDir\*" -DestinationPath (Join-Path $releaseDir "CimianAdmin-$Arch.zip") -Force
+
+    Write-BuildLog "Done with $Arch." 'SUCCESS'
+    return $msiDest
+}
+
+function Invoke-Release {
+    $archs = if ($script:ScriptBoundParameters.ContainsKey('Architecture')) {
+        @($Architecture)
+    } else {
+        # Release default ships both arches even though dev defaults to x64.
+        @('x64', 'arm64')
+    }
+
+    $releaseVersion = Resolve-ReleaseVersion
+    Write-BuildLog "Release version: $releaseVersion"
+
+    $cimipkg = Get-CimipkgPath
+    Write-BuildLog "Using cimipkg: $cimipkg"
+
+    $thumbprint = $null
+    $store = 'CurrentUser'
+    if ($shouldSign) {
+        if ($Thumbprint) {
+            $thumbprint = $Thumbprint
+        } else {
+            $certInfo = Get-SigningCertThumbprint
+            if (-not $certInfo) {
+                throw "No signing certificate found whose subject matches '$Global:EnterpriseCertSubject'. Pass -Thumbprint, set CIMIAN_CERT_SUBJECT, or use -NoSign."
+            }
+            $thumbprint = $certInfo.Thumbprint
+            $store = $certInfo.Store
+        }
+        Write-BuildLog "Signing with cert $thumbprint ($store)"
+    } else {
+        Write-BuildLog '-NoSign: producing unsigned MSI + binaries' 'WARNING'
+    }
+
+    $releaseDir = Join-Path $repoRoot 'release'
+    if (Test-Path $releaseDir) { Remove-Item $releaseDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+
+    $msiForCurrentArch = $null
+    foreach ($arch in $archs) {
+        $msi = Invoke-ReleaseForArch -Arch $arch -ReleaseVersion $releaseVersion -CimipkgExe $cimipkg -SignThumbprint $thumbprint -SignStore $store
+        if ($arch -eq $env:PROCESSOR_ARCHITECTURE.ToLower() -or
+            ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64' -and $arch -eq 'x64') -or
+            ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -and $arch -eq 'arm64')) {
+            $msiForCurrentArch = $msi
+        }
+    }
+
+    Write-BuildLog "Release artifacts in $releaseDir" 'SUCCESS'
+    Get-ChildItem $releaseDir | ForEach-Object { Write-BuildLog "  $($_.Name) ($([Math]::Round($_.Length / 1MB, 2)) MB)" }
+
+    if ($Install) {
+        if (-not $msiForCurrentArch) {
+            Write-BuildLog "-Install requested but no MSI was built for $env:PROCESSOR_ARCHITECTURE — skipping." 'WARNING'
+        } else {
+            Write-BuildLog "Installing $msiForCurrentArch (UAC expected)..."
+            Start-Process msiexec.exe -ArgumentList @('/i', "`"$msiForCurrentArch`"", '/passive', '/norestart') -Verb RunAs -Wait
+            Write-BuildLog 'msiexec returned.' 'SUCCESS'
+        }
+    }
+
+    if ($Upload) {
+        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            throw '-Upload specified but gh CLI is not on PATH.'
+        }
+        Write-BuildLog "Uploading signed artifacts to release $Upload (replacing existing)..."
+        $files = Get-ChildItem -Path $releaseDir -File | ForEach-Object { $_.FullName }
+        # --clobber so we overwrite the unsigned versions CI uploaded.
+        & gh release upload $Upload --clobber @files
+        if ($LASTEXITCODE -ne 0) { throw "gh release upload failed (exit $LASTEXITCODE)" }
+        Write-BuildLog "Upload complete." 'SUCCESS'
+    }
+}
+
 # --- Main ------------------------------------------------------------------
 
 try {
+    if ($Release) {
+        Invoke-Release
+        Write-BuildLog 'Done.' 'SUCCESS'
+        return
+    }
+
     if ($Clean) { Invoke-Clean }
 
     Stop-RunningApp

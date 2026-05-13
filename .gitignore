@@ -61,6 +61,12 @@ msbuild.binlog
 # Publish output
 publish/
 
+# Local release-pipeline artifacts produced by build.ps1 -Release
+release/
+staging-x64/
+staging-arm64/
+.tools/
+
 # Local settings
 appsettings.local.json
 appsettings.Development.json

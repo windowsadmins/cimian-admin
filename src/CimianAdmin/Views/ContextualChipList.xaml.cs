@@ -147,8 +147,8 @@ public sealed partial class ContextualChipList : UserControl
         // users know rows are reorderable.
         var dragHandle = new FontIcon
         {
-            Glyph = "", // GripperBarHorizontal
             FontSize = 12,
+            Glyph = "",
             Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 4, 0),
@@ -164,17 +164,31 @@ public sealed partial class ContextualChipList : UserControl
         Grid.SetColumn(label, 1);
         grid.Children.Add(label);
 
+        // Cap the context dropdown so a long conditional predicate (e.g.
+        // `hostname CONTAINS "X" OR machine_model CONTAINS "Y" OR ...`) can't
+        // push the chip wider than the row. MaxWidth + wrapping ItemTemplate
+        // lets long predicates wrap to multiple lines inside the chip.
         var contextBox = new ComboBox
         {
             MinWidth = 180,
+            MaxWidth = 360,
             VerticalAlignment = VerticalAlignment.Center,
+            ItemTemplate = (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(
+                """
+                <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:opt="using:CimianAdmin.Views">
+                  <TextBlock Text="{Binding Label}"
+                             TextWrapping="Wrap"
+                             MaxWidth="320" />
+                </DataTemplate>
+                """),
         };
         Grid.SetColumn(contextBox, 2);
         grid.Children.Add(contextBox);
 
         var remove = new Button
         {
-            Content = new FontIcon { Glyph = "", FontSize = 10 },
+            Content = new FontIcon { FontSize = 10, Glyph = "" },
             Padding = new Thickness(4),
             MinWidth = 22,
             MinHeight = 22,

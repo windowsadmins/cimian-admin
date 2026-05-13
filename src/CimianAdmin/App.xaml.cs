@@ -38,11 +38,14 @@ public partial class App : Application
                 services.AddSingleton<IPackageService, PackageService>();
                 services.AddSingleton<IManifestService, ManifestService>();
                 services.AddSingleton<ICatalogService, CatalogService>();
+                services.AddSingleton<IGitService, GitService>();
+                services.AddSingleton<ISearchService, SearchService>();
 
                 services.AddSingleton<MainViewModel>();
                 services.AddTransient<PackagesViewModel>();
                 services.AddTransient<ManifestsViewModel>();
                 services.AddTransient<CatalogsViewModel>();
+                services.AddTransient<Views.Import.ImportViewModel>();
 
                 services.AddTransient<MainWindow>();
 
@@ -51,6 +54,8 @@ public partial class App : Application
                 services.AddTransient<PackagesPage>();
                 services.AddTransient<ManifestsPage>();
                 services.AddTransient<CatalogsPage>();
+                services.AddTransient<GitPage>();
+                services.AddTransient<Views.Import.ImportPage>();
 
                 services.AddTransient<PackageEditorWindow>();
                 services.AddTransient<ManifestEditorWindow>();

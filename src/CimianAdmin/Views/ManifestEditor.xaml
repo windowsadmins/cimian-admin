@@ -7,12 +7,28 @@
     xmlns:local="using:CimianAdmin.Views">
 
     <Grid>
-        <TextBlock
-            x:Name="EmptyState"
-            Text="Select a manifest to view or edit its details."
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <Border x:Name="EmptyState"
+                Style="{StaticResource CardStyle}"
+                Shadow="{StaticResource CardShadow}"
+                Translation="0,0,16"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Padding="32,24,32,24"
+                MaxWidth="420">
+            <StackPanel Spacing="12" HorizontalAlignment="Center">
+                <Viewbox Width="32" Height="32">
+                    <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                          Stroke="{ThemeResource TextFillColorTertiaryBrush}"
+                          Data="M3,17 L5,19 L9,15 M3,7 L5,9 L9,5 M13,6 H21 M13,12 H21 M13,18 H21" />
+                </Viewbox>
+                <TextBlock Text="Select a manifest to view or edit its details."
+                           Style="{StaticResource BodyTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center" />
+            </StackPanel>
+        </Border>
 
         <Grid x:Name="EditorRoot" Visibility="Collapsed">
             <Grid.RowDefinitions>
@@ -35,6 +51,16 @@
                                TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock x:Name="DiskChangedIndicator"
+                               Text="Modified on disk"
+                               Visibility="Collapsed"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                               VerticalAlignment="Center">
+                        <ToolTipService.ToolTip>
+                            <TextBlock Text="This file differs from HEAD in the git working tree." />
+                        </ToolTipService.ToolTip>
+                    </TextBlock>
                     <TextBlock x:Name="DirtyIndicator"
                                Text="Modified"
                                Visibility="Collapsed"
@@ -43,7 +69,9 @@
                                VerticalAlignment="Center" />
                     <Button x:Name="DeleteButton" Click="OnDeleteClicked">
                         <Button.Content>
-                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            <Viewbox Width="14" Height="14">
+                                <Path Width="24" Height="24" Style="{StaticResource LucidePath}" Data="M3,6 H21 M19,6 V20 A2,2 0 0 1 17,22 H7 A2,2 0 0 1 5,20 V6 M8,6 V4 A2,2 0 0 1 10,2 H14 A2,2 0 0 1 16,4 V6 M10,11 V17 M14,11 V17" />
+                            </Viewbox>
                         </Button.Content>
                         <ToolTipService.ToolTip>
                             <TextBlock Text="Delete this manifest" />
@@ -59,9 +87,13 @@
             </Grid>
 
             <ScrollViewer Grid.Row="1" Padding="20,0,20,20">
-                <StackPanel Spacing="24">
+                <StackPanel Spacing="20">
 
                     <!-- General (catalogs first, then included manifests, then display name) -->
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <StackPanel Spacing="10">
                         <TextBlock Text="General" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <StackPanel>
@@ -93,24 +125,22 @@
                             <TextBox x:Name="DisplayNameField" TextChanged="OnFieldChanged" />
                         </StackPanel>
                     </StackPanel>
+                    </Border>
 
                     <!-- Managed -->
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <StackPanel Spacing="10">
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Managed" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <HyperlinkButton Grid.Column="1"
-                                             x:Name="AddConditionalButton"
-                                             Content="Add conditional"
-                                             Click="OnAddConditionalClicked"
-                                             Padding="4,2,4,2"
-                                             Margin="0,0,12,0" />
                             <TextBlock x:Name="ManagedConditionalHeader"
-                                       Grid.Column="2"
+                                       Grid.Column="1"
                                        Text="Conditionals"
                                        MinWidth="180"
                                        Style="{StaticResource CaptionTextBlockStyle}"
@@ -149,14 +179,43 @@
                                                   Changed="OnFieldChanged" />
                         </StackPanel>
                     </StackPanel>
+                    </Border>
 
-                    <!-- Notes -->
+                    <!-- Conditions section: dedicated home for add / edit / remove -->
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <TextBlock Text="Conditions"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       VerticalAlignment="Center" />
+                            <Button x:Name="AddConditionButton"
+                                    Content="Add condition…"
+                                    Click="OnAddConditionalClicked" />
+                        </StackPanel>
+                        <TextBlock x:Name="NoConditionsText"
+                                   Text="No conditions defined. Add one to scope items to specific machines."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   Visibility="Collapsed" />
+                        <ItemsControl x:Name="ConditionsList" />
+                    </StackPanel>
+                    </Border>
+
+                    <!-- Notes (last field) -->
+                    <Border Style="{StaticResource CardStyle}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,16"
+                            Padding="20,16,20,16">
                     <StackPanel Spacing="10">
                         <TextBlock Text="Notes" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBox x:Name="NotesField"
                                  AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120"
                                  TextChanged="OnFieldChanged" />
                     </StackPanel>
+                    </Border>
 
                 </StackPanel>
             </ScrollViewer>

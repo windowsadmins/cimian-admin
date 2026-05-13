@@ -53,10 +53,12 @@ public static partial class PwshHighlighter
     }
 
     /// <summary>
-    /// VS Code Dark+ inspired palette. These colours have enough contrast on both light
-    /// and dark Mica backgrounds to stay readable without theme switching.
+    /// Theme-aware palette. Dark side mirrors VS Code Dark+; light side is tuned down so
+    /// the pale yellows/greens don't disappear into a white background.
     /// </summary>
-    public static Color ColorFor(TokenKind kind) => kind switch
+    public static Color ColorFor(TokenKind kind, bool isDark) => isDark ? DarkPalette(kind) : LightPalette(kind);
+
+    private static Color DarkPalette(TokenKind kind) => kind switch
     {
         TokenKind.Comment => Color.FromArgb(0xFF, 0x6A, 0x99, 0x55),
         TokenKind.StringLiteral => Color.FromArgb(0xFF, 0xCE, 0x91, 0x78),
@@ -65,5 +67,16 @@ public static partial class PwshHighlighter
         TokenKind.Cmdlet => Color.FromArgb(0xFF, 0xDC, 0xDC, 0xAA),
         TokenKind.Number => Color.FromArgb(0xFF, 0xB5, 0xCE, 0xA8),
         _ => Color.FromArgb(0xFF, 0xD4, 0xD4, 0xD4),
+    };
+
+    private static Color LightPalette(TokenKind kind) => kind switch
+    {
+        TokenKind.Comment => Color.FromArgb(0xFF, 0x00, 0x80, 0x00),
+        TokenKind.StringLiteral => Color.FromArgb(0xFF, 0xA3, 0x15, 0x15),
+        TokenKind.Variable => Color.FromArgb(0xFF, 0x00, 0x70, 0xC1),
+        TokenKind.Keyword => Color.FromArgb(0xFF, 0x00, 0x00, 0xFF),
+        TokenKind.Cmdlet => Color.FromArgb(0xFF, 0x79, 0x5E, 0x26),
+        TokenKind.Number => Color.FromArgb(0xFF, 0x09, 0x88, 0x58),
+        _ => Color.FromArgb(0xFF, 0x1F, 0x1F, 0x1F),
     };
 }

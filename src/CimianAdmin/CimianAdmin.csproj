@@ -17,6 +17,7 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.Sizers" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Serilog" />
@@ -28,6 +29,14 @@
     <ProjectReference Include="..\CimianAdmin.Core\CimianAdmin.Core.csproj" />
     <ProjectReference Include="..\CimianAdmin.Infrastructure\CimianAdmin.Infrastructure.csproj" />
     <ProjectReference Include="..\CimianAdmin.Shared\CimianAdmin.Shared.csproj" />
+    <!-- Cimian.Import is the upstream cimiimport workflow as a library (split
+         out of cli/cimiimport so admin UIs can reference it without falling
+         foul of NETSDK1151 on self-contained exes). The WinUI Import tab
+         plugs a WinUIImportPrompter into the same code path the cimiimport
+         CLI uses. Relative path assumes the sibling-submodule layout under
+         the parent Cimian repo. -->
+    <ProjectReference Include="..\..\..\..\packages\CimianTools\shared\import\Cimian.Import.csproj"
+                      Private="true" />
   </ItemGroup>
 
   <ItemGroup>

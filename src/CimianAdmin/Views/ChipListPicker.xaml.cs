@@ -137,7 +137,7 @@ public sealed partial class ChipListPicker : UserControl
 
         var remove = new Button
         {
-            Content = new FontIcon { Glyph = "", FontSize = 10, Foreground = onAccentText },
+            Content = new FontIcon { FontSize = 10, Foreground = onAccentText, Glyph = "" },
             Padding = new Thickness(4),
             MinWidth = 22,
             MinHeight = 22,

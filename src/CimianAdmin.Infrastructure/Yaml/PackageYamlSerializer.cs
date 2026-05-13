@@ -41,7 +41,7 @@ public static class PackageYamlSerializer
         return pkg;
     }
 
-    public static Dictionary<string, string?>? ExtractMetadataBlock(string yaml)
+    public static Dictionary<string, object?>? ExtractMetadataBlock(string yaml)
     {
         if (string.IsNullOrEmpty(yaml))
         {
@@ -69,13 +69,13 @@ public static class PackageYamlSerializer
                     && string.Equals(keyNode.Value, "_metadata", StringComparison.Ordinal)
                     && entry.Value is YamlDotNet.RepresentationModel.YamlMappingNode mapping)
                 {
-                    var dict = new Dictionary<string, string?>(mapping.Children.Count);
+                    var dict = new Dictionary<string, object?>(mapping.Children.Count);
                     foreach (var item in mapping.Children)
                     {
                         if (item.Key is YamlDotNet.RepresentationModel.YamlScalarNode k
                             && k.Value is { Length: > 0 } kv)
                         {
-                            dict[kv] = (item.Value as YamlDotNet.RepresentationModel.YamlScalarNode)?.Value;
+                            dict[kv] = ConvertNode(item.Value);
                         }
                     }
                     return dict.Count == 0 ? null : dict;
@@ -86,6 +86,33 @@ public static class PackageYamlSerializer
         catch (YamlDotNet.Core.YamlException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Recursive YamlNode → CLR converter so non-scalar _metadata values (nested
+    /// mappings / sequences) survive round-trip instead of being silently dropped.
+    /// </summary>
+    private static object? ConvertNode(YamlDotNet.RepresentationModel.YamlNode? node)
+    {
+        switch (node)
+        {
+            case YamlDotNet.RepresentationModel.YamlScalarNode scalar:
+                return scalar.Value;
+            case YamlDotNet.RepresentationModel.YamlMappingNode map:
+                var dict = new Dictionary<object, object?>(map.Children.Count);
+                foreach (var (k, v) in map.Children)
+                {
+                    var key = (k as YamlDotNet.RepresentationModel.YamlScalarNode)?.Value ?? k.ToString() ?? string.Empty;
+                    dict[key] = ConvertNode(v);
+                }
+                return dict;
+            case YamlDotNet.RepresentationModel.YamlSequenceNode seq:
+                var list = new List<object?>(seq.Children.Count);
+                foreach (var child in seq.Children) list.Add(ConvertNode(child));
+                return list;
+            default:
+                return null;
         }
     }
 

@@ -1,5 +1,7 @@
 namespace CimianAdmin;
 
+using System.Globalization;
+using CimianAdmin.Core.Models.Git;
 using CimianAdmin.Core.Models.Repository;
 using CimianAdmin.Core.Services;
 using CimianAdmin.Shared;
@@ -7,12 +9,14 @@ using CimianAdmin.ViewModels;
 using CimianAdmin.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
 public sealed partial class MainWindow : Window
 {
     private readonly IRepositoryService _repositoryService;
+    private readonly IGitService _gitService;
     private readonly MainViewModel _mainViewModel;
     private bool _suppressNavSelection;
     private string? _currentTag;
@@ -26,11 +30,13 @@ public sealed partial class MainWindow : Window
     private int _historyIndex = -1;
     private bool _suppressHistoryPush;
 
-    public MainWindow(IRepositoryService repositoryService, MainViewModel mainViewModel)
+    public MainWindow(IRepositoryService repositoryService, IGitService gitService, MainViewModel mainViewModel)
     {
         ArgumentNullException.ThrowIfNull(repositoryService);
+        ArgumentNullException.ThrowIfNull(gitService);
         ArgumentNullException.ThrowIfNull(mainViewModel);
         _repositoryService = repositoryService;
+        _gitService = gitService;
         _mainViewModel = mainViewModel;
 
         InitializeComponent();
@@ -39,9 +45,15 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         Title = Constants.AppName;
 
+        // Mica gives the whole window a system-tinted ambient backdrop instead of
+        // the flat black we'd otherwise get in dark mode. WinUI 1.3+ handles the
+        // unsupported-host fallback to SolidBackgroundFillColorBase automatically.
+        SystemBackdrop = new MicaBackdrop();
+
         _repositoryService.RepositoryChanged += OnRepositoryChanged;
         UpdateRepoTitle(_repositoryService.CurrentRepository);
         UpdateNavEnabled(_repositoryService.CurrentRepository is not null);
+        _ = RefreshGitIndicatorAsync(_repositoryService.CurrentRepository);
     }
 
     /// <summary>
@@ -240,7 +252,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ApplyRepositoryChange(CimianRepository? repository)
+    private async void ApplyRepositoryChange(CimianRepository? repository)
     {
         UpdateRepoTitle(repository);
         UpdateNavEnabled(repository is not null);
@@ -249,6 +261,8 @@ public sealed partial class MainWindow : Window
         {
             NavigateTo("repository");
         }
+
+        await RefreshGitIndicatorAsync(repository).ConfigureAwait(true);
     }
 
     private void UpdateRepoTitle(CimianRepository? repository)
@@ -256,12 +270,64 @@ public sealed partial class MainWindow : Window
         RepoTitleText.Text = repository is null ? string.Empty : repository.Name;
     }
 
+    /// <summary>
+    /// Refreshes the title-bar branch / ahead-behind chip. Best-effort: any failure
+    /// just hides the chip — we never want a git problem to break navigation.
+    /// </summary>
+    public async Task RefreshGitIndicatorAsync(CimianRepository? repository)
+    {
+        if (repository is null)
+        {
+            GitIndicator.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        GitRepositoryInfo? info;
+        try
+        {
+            info = await _gitService.DiscoverAsync(repository.RootPath).ConfigureAwait(true);
+        }
+        catch
+        {
+            info = null;
+        }
+
+        if (info is null || string.IsNullOrEmpty(info.Branch))
+        {
+            GitIndicator.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        GitBranchText.Text = info.Branch;
+        GitAheadBehindText.Text = FormatAheadBehind(info);
+        GitIndicatorTooltip.Text = FormatGitTooltip(repository, info);
+        GitIndicator.Visibility = Visibility.Visible;
+    }
+
+    private static string FormatAheadBehind(GitRepositoryInfo info)
+    {
+        if (!info.HasUpstream) return "(no upstream)";
+        if (info.AheadCount == 0 && info.BehindCount == 0) return "↑0 ↓0";
+        return string.Create(CultureInfo.InvariantCulture, $"↑{info.AheadCount} ↓{info.BehindCount}");
+    }
+
+    private static string FormatGitTooltip(CimianRepository repository, GitRepositoryInfo info)
+    {
+        var scope = string.IsNullOrEmpty(info.RelativeRepoPath) ? repository.Name : info.RelativeRepoPath;
+        var rootName = Path.GetFileName(info.GitRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return string.IsNullOrEmpty(info.RelativeRepoPath)
+            ? $"Git repository · branch {info.Branch}"
+            : $"Git status scoped to {scope} (in {rootName} repo) · branch {info.Branch}";
+    }
+
     private void UpdateNavEnabled(bool enabled)
     {
         NavRepository.IsEnabled = enabled;
         NavPackages.IsEnabled = enabled;
+        NavImport.IsEnabled = enabled;
         NavManifests.IsEnabled = enabled;
         NavCatalogs.IsEnabled = enabled;
+        NavGit.IsEnabled = enabled;
     }
 
     private NavigationViewItem? FindNavItem(string tag)
@@ -270,8 +336,10 @@ public sealed partial class MainWindow : Window
         {
             "repository" => NavRepository,
             "packages" => NavPackages,
+            "import" => NavImport,
             "manifests" => NavManifests,
             "catalogs" => NavCatalogs,
+            "git" => NavGit,
             _ => null,
         };
     }
@@ -285,6 +353,8 @@ public sealed partial class MainWindow : Window
             "packages" => App.Resolve<PackagesPage>(),
             "manifests" => App.Resolve<ManifestsPage>(),
             "catalogs" => App.Resolve<CatalogsPage>(),
+            "import" => App.Resolve<Views.Import.ImportPage>(),
+            "git" => App.Resolve<GitPage>(),
             _ => null,
         };
     }

@@ -23,8 +23,12 @@ public sealed partial class ManifestsPage : Page
         Unloaded += OnUnloaded;
     }
 
-    // Segoe Fluent glyphs: Document (E8A5) for manifest leaves, FolderHorizontal (E8B7) for synthetic folders.
-    public static string NodeGlyph(bool hasManifest) => hasManifest ? "\uE8A5" : "\uE8B7";
+    // Tree rows use TWO inline Paths (file-text + folder) with Visibility toggled
+    // by these helpers — XamlReader.Load on the hot virtualization path crashed.
+    public static Microsoft.UI.Xaml.Visibility VisIfManifest(bool hasManifest) =>
+        hasManifest ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public static Microsoft.UI.Xaml.Visibility VisIfFolder(bool hasManifest) =>
+        hasManifest ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

@@ -58,7 +58,7 @@ public class PackageEmitterTests
             Version = "1.0",
             Catalogs = ["Production"],
             Description = "x",
-            Metadata = new Dictionary<string, string?> { ["cimian-promoter_edit_date"] = "2026-04-29T18:01:30Z" },
+            Metadata = new Dictionary<string, object?> { ["cimian-promoter_edit_date"] = "2026-04-29T18:01:30Z" },
         };
 
         var yaml = PackageYamlSerializer.Serialize(pkg);

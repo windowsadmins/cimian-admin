@@ -101,7 +101,10 @@ public sealed class RepositoryService : IRepositoryService
 
         repository.PackageCount = CountYaml(repository.PkgsInfoPath, recursive: true);
         repository.ManifestCount = CountYaml(repository.ManifestsPath, recursive: true);
-        repository.CatalogCount = CountYaml(repository.CatalogsPath, recursive: false);
+        // 'All.yaml' is the synthesized union catalog written by makecatalogs — count
+        // only the real, named catalogs so the Home tile matches what users see in the
+        // Catalogs page (which already filters it out).
+        repository.CatalogCount = CountCatalogs(repository.CatalogsPath);
         repository.LastScanned = DateTime.UtcNow;
 
         return Task.CompletedTask;
@@ -118,5 +121,15 @@ public sealed class RepositoryService : IRepositoryService
         var yaml = Directory.EnumerateFiles(directory, "*" + Constants.FileExtensions.Yaml, option);
         var yml = Directory.EnumerateFiles(directory, "*" + Constants.FileExtensions.Yml, option);
         return yaml.Count() + yml.Count();
+    }
+
+    private static int CountCatalogs(string directory)
+    {
+        if (!Directory.Exists(directory)) return 0;
+        return Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
+            .Where(p =>
+                p.EndsWith(Constants.FileExtensions.Yaml, StringComparison.OrdinalIgnoreCase) ||
+                p.EndsWith(Constants.FileExtensions.Yml, StringComparison.OrdinalIgnoreCase))
+            .Count(p => !string.Equals(Path.GetFileNameWithoutExtension(p), "All", StringComparison.OrdinalIgnoreCase));
     }
 }

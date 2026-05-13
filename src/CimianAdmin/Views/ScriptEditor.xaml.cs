@@ -211,7 +211,7 @@ public sealed partial class ScriptEditor : UserControl
             foreach (var token in PwshHighlighter.Tokenize(text))
             {
                 var range = doc.GetRange(token.Start, token.Start + token.Length);
-                range.CharacterFormat.ForegroundColor = PwshHighlighter.ColorFor(token.Kind);
+                range.CharacterFormat.ForegroundColor = PwshHighlighter.ColorFor(token.Kind, ActualTheme == ElementTheme.Dark);
             }
 
             doc.Selection.SetRange(selStart, selEnd);

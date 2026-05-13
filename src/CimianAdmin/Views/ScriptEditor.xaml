@@ -27,8 +27,11 @@
                     Padding="6,2,6,2"
                     MinWidth="0"
                     Visibility="Visible">
-                <FontIcon Glyph="&#xE740;" FontSize="12"
-                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Viewbox Width="12" Height="12">
+                    <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                          Stroke="{ThemeResource TextFillColorSecondaryBrush}"
+                          Data="M15,3 L21,3 L21,9 M9,21 L3,21 L3,15 M21,3 L14,10 M3,21 L10,14" />
+                </Viewbox>
                 <ToolTipService.ToolTip>
                     <TextBlock Text="Open in full editor" />
                 </ToolTipService.ToolTip>

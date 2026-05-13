@@ -138,7 +138,7 @@ public sealed partial class ImportPage : Page
     /// <summary>
     /// Single file → auto-advance into Step 1 of the wizard (mirrors what a CLI
     /// invocation does after the first prompt: extract + show + ask).
-    /// Multi-file → enqueue for batch import (queue UI lands in M6).
+    /// Multi-file → enqueue for batch import and reveal the queue panel.
     /// </summary>
     private async Task HandleSelectedFilesAsync(List<string> paths)
     {
@@ -148,15 +148,230 @@ public sealed partial class ImportPage : Page
             return;
         }
 
-        ViewModel.EnqueueFiles(paths);
-
-        if (paths.Count > 1)
+        // Single-file fast path: skip the queue UI entirely.
+        if (paths.Count == 1 && ViewModel.Queue.Count == 0)
         {
-            StatusText.Text = $"Queued {paths.Count} files. Batch import is coming soon — drop one file at a time for now.";
+            await EnterWizardAsync(paths[0]).ConfigureAwait(true);
             return;
         }
 
-        await EnterWizardAsync(paths[0]).ConfigureAwait(true);
+        ViewModel.EnqueueFiles(paths);
+        await ShowBatchQueueAsync().ConfigureAwait(true);
+        StatusText.Text = $"Queue has {ViewModel.Queue.Count} item{(ViewModel.Queue.Count == 1 ? string.Empty : "s")} — review and click Process queue to import them all.";
+    }
+
+    /// <summary>
+    /// Reveals the queue panel, loads catalog suggestions into the default-catalog
+    /// combo (once), and ensures the combo has a usable default. Catalog list comes
+    /// from <see cref="ICatalogService"/>, same source as the wizard's chip picker.
+    /// </summary>
+    private async Task ShowBatchQueueAsync()
+    {
+        QueuePanel.Visibility = Visibility.Visible;
+
+        if (BatchCatalogCombo.Items.Count == 0)
+        {
+            try
+            {
+                var catalogs = await _catalogService.GetCatalogNamesAsync().ConfigureAwait(true);
+                foreach (var c in catalogs)
+                {
+                    BatchCatalogCombo.Items.Add(c);
+                }
+            }
+            catch
+            {
+                // ignored — IsEditable combo lets the user type a name anyway
+            }
+
+            // Default to Development if it exists, otherwise leave empty.
+            var dev = BatchCatalogCombo.Items.OfType<string>()
+                .FirstOrDefault(c => string.Equals(c, "Development", StringComparison.OrdinalIgnoreCase));
+            if (dev is not null)
+            {
+                BatchCatalogCombo.SelectedItem = dev;
+            }
+        }
+    }
+
+    private void OnRemoveQueueItemClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string path })
+        {
+            var item = ViewModel.Queue.FirstOrDefault(q => string.Equals(q.FilePath, path, StringComparison.OrdinalIgnoreCase));
+            if (item is not null) ViewModel.Queue.Remove(item);
+            if (ViewModel.Queue.Count == 0) QueuePanel.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OnClearQueueClicked(object sender, RoutedEventArgs e)
+    {
+        ViewModel.Queue.Clear();
+        QueuePanel.Visibility = Visibility.Collapsed;
+        StatusText.Text = string.Empty;
+    }
+
+    /// <summary>
+    /// Runs each Pending item through a non-interactive import: extract metadata,
+    /// hash + copy the installer, write the pkginfo. Already-Done and Error items
+    /// are skipped so retries don't double-write. Each row's status flips live
+    /// thanks to <see cref="ImportViewModel.QueueItem"/> being observable.
+    /// </summary>
+    private async void OnProcessQueueClicked(object sender, RoutedEventArgs e)
+    {
+        if (_repositoryService.CurrentRepository is not { } repo)
+        {
+            StatusText.Text = "No repository is open.";
+            return;
+        }
+
+        ProcessQueueButton.IsEnabled = false;
+        ClearQueueButton.IsEnabled = false;
+
+        var defaultCatalog = (BatchCatalogCombo.SelectedItem as string ?? BatchCatalogCombo.Text ?? string.Empty).Trim();
+        var subdir = (BatchSubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\');
+
+        try
+        {
+            foreach (var item in ViewModel.Queue.ToList())
+            {
+                if (item.Status is ImportViewModel.QueueItemStatus.Done or ImportViewModel.QueueItemStatus.InProgress)
+                {
+                    continue;
+                }
+
+                item.Status = ImportViewModel.QueueItemStatus.InProgress;
+                item.StatusText = "Extracting metadata…";
+
+                try
+                {
+                    await ProcessQueueItemAsync(item, repo, defaultCatalog, subdir).ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    item.Status = ImportViewModel.QueueItemStatus.Error;
+                    item.StatusText = ex.Message;
+                }
+            }
+
+            var done = ViewModel.Queue.Count(q => q.Status == ImportViewModel.QueueItemStatus.Done);
+            var failed = ViewModel.Queue.Count(q => q.Status == ImportViewModel.QueueItemStatus.Error);
+            StatusText.Text = failed == 0
+                ? $"Batch complete — imported {done} of {ViewModel.Queue.Count}."
+                : $"Batch complete — {done} imported, {failed} failed (see status lines above).";
+        }
+        finally
+        {
+            ProcessQueueButton.IsEnabled = true;
+            ClearQueueButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// Non-interactive import for one queue item: re-extracts metadata, applies
+    /// template inheritance if a name match exists, hashes + copies the installer,
+    /// then writes the pkginfo. Mirrors the wizard's Step 4 save logic but with
+    /// the user-chosen batch defaults instead of edited values.
+    /// </summary>
+    private async Task ProcessQueueItemAsync(
+        ImportViewModel.QueueItem item,
+        CimianAdmin.Core.Models.Repository.CimianRepository repo,
+        string defaultCatalog,
+        string subdir)
+    {
+        var filePath = item.FilePath;
+
+        // Extract metadata off the UI thread (Wix DTF interop can stall).
+        var meta = await Task.Run(() =>
+        {
+            var extractor = new MetadataExtractor();
+            return extractor.ExtractMetadata(filePath, new ImportConfiguration
+            {
+                RepoPath = repo.RootPath,
+            });
+        }).ConfigureAwait(true);
+
+        if (meta is null)
+        {
+            throw new InvalidOperationException("Metadata extractor returned no result.");
+        }
+
+        if (string.IsNullOrEmpty(meta.ID))
+        {
+            meta.ID = Path.GetFileNameWithoutExtension(filePath);
+        }
+
+        var filenameArch = MetadataExtractor.DetectArchFromFilename(Path.GetFileName(filePath));
+        if (!string.IsNullOrEmpty(filenameArch))
+        {
+            meta.Architecture = filenameArch;
+            meta.SupportedArch = [filenameArch];
+        }
+
+        if (!string.IsNullOrEmpty(defaultCatalog) && meta.Catalogs.Count == 0)
+        {
+            meta.Catalogs = [defaultCatalog];
+        }
+
+        // Template inherit: pull catalogs/scripts/blocking_apps from an existing
+        // package with the same name (matches the wizard's "Use template" path,
+        // but auto-applied in batch mode for parity with cimiimport's defaults).
+        var all = await _packageService.GetAllPackagesAsync().ConfigureAwait(true);
+        var template = all.FirstOrDefault(p => string.Equals(p.Name, meta.ID, StringComparison.OrdinalIgnoreCase));
+
+        item.StatusText = "Hashing and copying installer…";
+        var ext = Path.GetExtension(filePath);
+        var fileBase = $"{meta.ID}-{meta.Version}";
+        var installerTarget = string.IsNullOrEmpty(subdir)
+            ? Path.Combine(repo.PkgsPath, $"{fileBase}{ext}")
+            : Path.Combine(repo.PkgsPath, subdir.Replace('/', Path.DirectorySeparatorChar), $"{fileBase}{ext}");
+        Directory.CreateDirectory(Path.GetDirectoryName(installerTarget)!);
+
+        var (hash, size) = await Task.Run(() => CopyAndHash(filePath, installerTarget)).ConfigureAwait(true);
+
+        item.StatusText = "Writing pkginfo…";
+        var installerRel = Path.GetRelativePath(repo.PkgsPath, installerTarget).Replace('\\', '/');
+
+        var pkg = new Package
+        {
+            Name = meta.ID,
+            Version = meta.Version,
+            Description = NullIfEmpty(meta.Description),
+            Developer = NullIfEmpty(meta.Developer),
+            Category = NullIfEmpty(meta.Category),
+            Catalogs = [.. meta.Catalogs],
+            SupportedArchitectures = meta.SupportedArch.Count > 0 ? [.. meta.SupportedArch] : null,
+            UnattendedInstall = meta.UnattendedInstall,
+            UnattendedUninstall = meta.UnattendedUninstall,
+            BlockingApplications = meta.BlockingApps ?? template?.BlockingApplications,
+            InstallerType = NullIfEmpty(meta.InstallerType),
+            Installer = new CimianAdmin.Core.Models.Packages.Installer
+            {
+                Type = NullIfEmpty(meta.InstallerType),
+                Location = installerRel,
+                Hash = hash,
+                Size = size > 0 ? size : null,
+                ProductCode = NullIfEmpty(meta.ProductCode),
+                UpgradeCode = NullIfEmpty(meta.UpgradeCode),
+                IdentityName = NullIfEmpty(meta.IdentityName),
+            },
+            PreinstallScript = template?.PreinstallScript,
+            PostinstallScript = template?.PostinstallScript,
+            PreuninstallScript = template?.PreuninstallScript,
+            PostuninstallScript = template?.PostuninstallScript,
+            InstallCheckScript = template?.InstallCheckScript,
+            UninstallCheckScript = template?.UninstallCheckScript,
+            Requires = template?.Requires is { Count: > 0 } req ? [.. req] : null,
+            UpdateFor = template?.UpdateFor is { Count: > 0 } uf ? [.. uf] : null,
+            MinimumOsVersion = template?.MinimumOsVersion,
+            MaximumOsVersion = template?.MaximumOsVersion,
+            MinimumCimianVersion = template?.MinimumCimianVersion,
+        };
+
+        await _packageService.CreatePackageAsync(pkg, subdir.Replace('\\', '/')).ConfigureAwait(true);
+
+        item.Status = ImportViewModel.QueueItemStatus.Done;
+        item.StatusText = $"Imported → {installerRel}";
     }
 
     private async Task EnterWizardAsync(string filePath)
@@ -376,6 +591,7 @@ public sealed partial class ImportPage : Page
         StatusText.Text = string.Empty;
         SetStep(WizardStep.Review);
         ViewModel.Queue.Clear();
+        QueuePanel.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>

@@ -19,41 +19,145 @@
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </StackPanel>
 
-        <Border x:Name="IdleView"
-                Grid.Row="1"
-                Style="{StaticResource CardStyle}"
-                Shadow="{StaticResource CardShadow}"
-                Translation="0,0,16"
-                AllowDrop="True"
-                DragOver="OnDropZoneDragOver"
-                Drop="OnDropZoneDrop">
-            <Grid>
-                <StackPanel HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="12">
-                    <Viewbox Width="48" Height="48">
-                        <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
-                              Stroke="{ThemeResource TextFillColorTertiaryBrush}"
-                              Data="M21,15 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V15 M17,8 L12,3 L7,8 M12,3 V15" />
-                    </Viewbox>
-                    <TextBlock Text="Drop installer files here"
-                               Style="{StaticResource SubtitleTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               HorizontalAlignment="Center" />
-                    <Button x:Name="PickFileButton"
-                            Content="Or pick a file…"
-                            HorizontalAlignment="Center"
-                            Click="OnPickFileClicked" />
-                    <TextBlock x:Name="StatusText"
-                               Style="{StaticResource CaptionTextBlockStyle}"
-                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                               HorizontalAlignment="Center"
-                               TextAlignment="Center"
-                               MaxWidth="420"
-                               TextWrapping="Wrap" />
+        <!-- Idle view: drop-zone on top, batch queue below (visible only when the
+             user dropped multiple files). Single-file drops bypass this entirely
+             and go straight into the wizard. -->
+        <Grid x:Name="IdleView" Grid.Row="1" RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="180" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Style="{StaticResource CardStyle}"
+                    Shadow="{StaticResource CardShadow}"
+                    Translation="0,0,16"
+                    AllowDrop="True"
+                    DragOver="OnDropZoneDragOver"
+                    Drop="OnDropZoneDrop">
+                <Grid>
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Spacing="12">
+                        <Viewbox Width="48" Height="48">
+                            <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                                  Stroke="{ThemeResource TextFillColorTertiaryBrush}"
+                                  Data="M21,15 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V15 M17,8 L12,3 L7,8 M12,3 V15" />
+                        </Viewbox>
+                        <TextBlock Text="Drop installer files here"
+                                   Style="{StaticResource SubtitleTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center" />
+                        <Button x:Name="PickFileButton"
+                                Content="Or pick a file…"
+                                HorizontalAlignment="Center"
+                                Click="OnPickFileClicked" />
+                        <TextBlock x:Name="StatusText"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   MaxWidth="420"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Batch queue. Visible only when ViewModel.Queue has items. -->
+            <Border x:Name="QueuePanel"
+                    Grid.Row="1"
+                    Style="{StaticResource CardStyle}"
+                    Shadow="{StaticResource CardShadow}"
+                    Translation="0,0,16"
+                    Padding="16,12,16,12"
+                    Visibility="Collapsed">
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock x:Name="QueueHeader"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       Text="Batch queue" />
+                            <TextBlock Text="Process imports back-to-back. The catalog and subdirectory chosen here apply to every file in the queue; filename-detected architecture still wins per file."
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                x:Name="ClearQueueButton"
+                                Content="Clear"
+                                Click="OnClearQueueClicked" />
+                        <Button Grid.Column="2"
+                                x:Name="ProcessQueueButton"
+                                Content="Process queue"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Click="OnProcessQueueClicked" />
+                    </Grid>
+
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="Default catalog" Style="{StaticResource CaptionTextBlockStyle}" />
+                            <ComboBox x:Name="BatchCatalogCombo"
+                                      HorizontalAlignment="Stretch"
+                                      IsEditable="True" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="Repo subdirectory (optional)" Style="{StaticResource CaptionTextBlockStyle}" />
+                            <TextBox x:Name="BatchSubdirBox"
+                                     PlaceholderText="apps (leave blank for top-level)" />
+                        </StackPanel>
+                    </Grid>
+
+                    <ListView x:Name="QueueListView"
+                              ItemsSource="{x:Bind ViewModel.Queue}"
+                              SelectionMode="None"
+                              MaxHeight="320">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Padding="4,6,4,6" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="{Binding FileName}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding StatusText}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Status}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               VerticalAlignment="Center" />
+                                    <Button Grid.Column="2"
+                                            Content="✕"
+                                            FontSize="10"
+                                            MinWidth="26"
+                                            MinHeight="26"
+                                            Padding="0"
+                                            Click="OnRemoveQueueItemClicked"
+                                            Tag="{Binding FilePath}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
                 </StackPanel>
-            </Grid>
-        </Border>
+            </Border>
+        </Grid>
 
         <Grid x:Name="WizardView" Grid.Row="1" Visibility="Collapsed" RowSpacing="12">
             <Grid.RowDefinitions>

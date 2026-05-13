@@ -122,13 +122,15 @@
                              MaxHeight="140" />
                 </StackPanel>
 
-                <Grid Grid.Row="1" ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <!-- Identity gets its own row so a narrow window can't crush it; the
+                     action row below stays full-width with checkboxes + commit buttons. -->
+                <Grid Grid.Row="1" RowSpacing="6">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Column="0"
+                    <StackPanel Grid.Row="0"
                                 Orientation="Horizontal"
                                 Spacing="6"
                                 VerticalAlignment="Center"
@@ -149,12 +151,11 @@
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"
-                                       MaxWidth="320"
                                        Text="(no identity)" />
                         </HyperlinkButton>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="1"
+                    <StackPanel Grid.Row="1"
                                 Orientation="Horizontal"
                                 Spacing="10"
                                 HorizontalAlignment="Right">

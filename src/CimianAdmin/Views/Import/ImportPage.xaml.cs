@@ -140,7 +140,7 @@ public sealed partial class ImportPage : Page
 
         if (paths.Count > 1)
         {
-            StatusText.Text = $"Queued {paths.Count} files for batch import — queue UI lands in M6.";
+            StatusText.Text = $"Queued {paths.Count} files. Batch import is coming soon — drop one file at a time for now.";
             return;
         }
 

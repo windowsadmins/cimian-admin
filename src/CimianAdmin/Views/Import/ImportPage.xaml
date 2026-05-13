@@ -4,15 +4,6 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!--
-        Skeleton for the cimiimport-native Import tab. The full wizard arrives in
-        M3+; this scaffold lays out the persistent shape:
-          - Left column: queue of files being imported (drag-drop target)
-          - Middle column: the wizard step pane (will host PickStep / EditStep /
-            ScriptsStep / LocationStep / ReviewStep depending on view-model state)
-          - Right column: live derived facts (file hash, detected metadata,
-            generated YAML preview) plus a warnings strip
-    -->
     <Grid Padding="20" RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -27,8 +18,8 @@
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </StackPanel>
 
-        <!-- Drop-zone placeholder card. Real wizard markup arrives in M3. -->
-        <Border Grid.Row="1"
+        <Border x:Name="IdleView"
+                Grid.Row="1"
                 Style="{StaticResource CardStyle}"
                 Shadow="{StaticResource CardShadow}"
                 Translation="0,0,16"
@@ -62,5 +53,95 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <Grid x:Name="WizardView" Grid.Row="1" Visibility="Collapsed" RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Text="Step 1 of 4 · Review"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           x:Name="WizardFileName"
+                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
+                <HyperlinkButton Grid.Column="2"
+                                 Content="Pick a different file…"
+                                 Click="OnRestartClicked" />
+            </Grid>
+
+            <Border Grid.Row="1"
+                    Style="{StaticResource CardStyle}"
+                    Shadow="{StaticResource CardShadow}"
+                    Translation="0,0,16"
+                    Padding="20,16,20,16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="16">
+                        <InfoBar x:Name="TemplateBanner"
+                                 IsClosable="False"
+                                 IsOpen="False"
+                                 Severity="Informational">
+                            <InfoBar.Content>
+                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
+                                    <Button x:Name="UseTemplateButton"
+                                            Content="Use template"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            Click="OnUseTemplateClicked" />
+                                    <Button x:Name="StartFreshButton"
+                                            Content="Start fresh"
+                                            Click="OnStartFreshClicked" />
+                                </StackPanel>
+                            </InfoBar.Content>
+                        </InfoBar>
+
+                        <TextBlock Text="Detected metadata"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                        <Grid x:Name="DetectedGrid" ColumnSpacing="20" RowSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                        </Grid>
+
+                        <TextBlock x:Name="ExtractError"
+                                   Visibility="Collapsed"
+                                   Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Grid Grid.Row="2" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="1" Content="Cancel" Click="OnCancelClicked" />
+                <Button Grid.Column="2"
+                        x:Name="ContinueButton"
+                        Content="Continue"
+                        Style="{StaticResource AccentButtonStyle}"
+                        IsEnabled="False"
+                        Click="OnContinueClicked">
+                    <ToolTipService.ToolTip>
+                        <TextBlock Text="Step 2 (edit metadata) lands in M4." />
+                    </ToolTipService.ToolTip>
+                </Button>
+            </Grid>
+        </Grid>
     </Grid>
 </Page>

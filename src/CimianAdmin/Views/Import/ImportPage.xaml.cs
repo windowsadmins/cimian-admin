@@ -209,6 +209,9 @@ public sealed partial class ImportPage : Page
         ViewModel.Queue.Clear();
         QueuePanel.Visibility = Visibility.Collapsed;
         StatusText.Text = string.Empty;
+        _batchImportedPaths = [];
+        ProcessQueueButton.Visibility = Visibility.Visible;
+        QueueOpenInGitButton.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -231,6 +234,10 @@ public sealed partial class ImportPage : Page
         var defaultCatalog = (BatchCatalogCombo.SelectedItem as string ?? BatchCatalogCombo.Text ?? string.Empty).Trim();
         var subdir = (BatchSubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\');
 
+        // Reset the batch-handoff tracker — each Process run owns its own set of
+        // imported paths so retrying after errors gives a clean handoff list.
+        _batchImportedPaths = [];
+
         try
         {
             foreach (var item in ViewModel.Queue.ToList())
@@ -245,7 +252,8 @@ public sealed partial class ImportPage : Page
 
                 try
                 {
-                    await ProcessQueueItemAsync(item, repo, defaultCatalog, subdir).ConfigureAwait(true);
+                    var written = await ProcessQueueItemAsync(item, repo, defaultCatalog, subdir).ConfigureAwait(true);
+                    _batchImportedPaths.AddRange(written);
                 }
                 catch (Exception ex)
                 {
@@ -259,6 +267,14 @@ public sealed partial class ImportPage : Page
             StatusText.Text = failed == 0
                 ? $"Batch complete — imported {done} of {ViewModel.Queue.Count}."
                 : $"Batch complete — {done} imported, {failed} failed (see status lines above).";
+
+            // Show the Git hand-off button when at least one row imported. Hide
+            // the Process button to keep the action area uncluttered.
+            if (done > 0)
+            {
+                ProcessQueueButton.Visibility = Visibility.Collapsed;
+                QueueOpenInGitButton.Visibility = Visibility.Visible;
+            }
         }
         finally
         {
@@ -267,13 +283,32 @@ public sealed partial class ImportPage : Page
         }
     }
 
+    // Absolute paths of pkginfo+installer files written by the most recent batch
+    // run. Used by the "Commit batch in Git tab" handoff.
+    private List<string> _batchImportedPaths = [];
+
+    private async void OnQueueOpenInGitClicked(object sender, RoutedEventArgs e)
+    {
+        if (_batchImportedPaths.Count == 0 || App.MainWindowInstance is not { } window) return;
+
+        var done = ViewModel.Queue.Count(q => q.Status == ImportViewModel.QueueItemStatus.Done);
+        var subject = $"Import batch: {done} package{(done == 1 ? string.Empty : "s")} into repo";
+        var body = string.Join('\n', ViewModel.Queue
+            .Where(q => q.Status == ImportViewModel.QueueItemStatus.Done)
+            .Select(q => $"- {q.FileName}"));
+
+        window.NavigateTo("git");
+        var gitPage = App.Resolve<GitPage>();
+        await gitPage.PrepareCommitAsync(_batchImportedPaths, subject, body).ConfigureAwait(true);
+    }
+
     /// <summary>
     /// Non-interactive import for one queue item: re-extracts metadata, applies
     /// template inheritance if a name match exists, hashes + copies the installer,
     /// then writes the pkginfo. Mirrors the wizard's Step 4 save logic but with
     /// the user-chosen batch defaults instead of edited values.
     /// </summary>
-    private async Task ProcessQueueItemAsync(
+    private async Task<List<string>> ProcessQueueItemAsync(
         ImportViewModel.QueueItem item,
         CimianAdmin.Core.Models.Repository.CimianRepository repo,
         string defaultCatalog,
@@ -372,6 +407,13 @@ public sealed partial class ImportPage : Page
 
         item.Status = ImportViewModel.QueueItemStatus.Done;
         item.StatusText = $"Imported → {installerRel}";
+
+        // CreatePackageAsync builds the same pkginfo path PrepareCommitAsync expects.
+        var pkginfoDir = string.IsNullOrEmpty(subdir)
+            ? repo.PkgsInfoPath
+            : Path.Combine(repo.PkgsInfoPath, subdir.Replace('/', Path.DirectorySeparatorChar));
+        var pkginfoAbs = Path.Combine(pkginfoDir, $"{fileBase}.yaml");
+        return [pkginfoAbs, installerTarget];
     }
 
     private async Task EnterWizardAsync(string filePath)
@@ -592,6 +634,12 @@ public sealed partial class ImportPage : Page
         SetStep(WizardStep.Review);
         ViewModel.Queue.Clear();
         QueuePanel.Visibility = Visibility.Collapsed;
+        _batchImportedPaths = [];
+        ProcessQueueButton.Visibility = Visibility.Visible;
+        QueueOpenInGitButton.Visibility = Visibility.Collapsed;
+        OpenInGitButton.Visibility = Visibility.Collapsed;
+        _lastImportedPaths = [];
+        _lastImportedSubject = string.Empty;
     }
 
     /// <summary>
@@ -778,6 +826,10 @@ public sealed partial class ImportPage : Page
     // ---- Step 4: location + review ----
 
     private string _sourceInstallerPath = string.Empty;
+    // Tracks the files written by the most recent Save so the "Commit in Git tab"
+    // hand-off knows which rows to pre-select. Cleared on ResetToIdle.
+    private List<string> _lastImportedPaths = [];
+    private string _lastImportedSubject = string.Empty;
 
     /// <summary>
     /// Builds the Step 4 view: a subdir entry, computed paths, and a live YAML
@@ -930,9 +982,20 @@ public sealed partial class ImportPage : Page
 
             await _packageService.CreatePackageAsync(pkg, subdir.Replace(Path.DirectorySeparatorChar, '/')).ConfigureAwait(true);
 
+            // Stash the absolute paths so the Git hand-off button can pre-select
+            // these rows on the Git tab. pkginfo path lives under PkgsInfoPath
+            // (CreatePackageAsync builds it the same way).
+            var pkgInfoDir = string.IsNullOrEmpty(subdir)
+                ? repo.PkgsInfoPath
+                : Path.Combine(repo.PkgsInfoPath, subdir);
+            var pkginfoAbs = Path.Combine(pkgInfoDir, $"{fileBase}.yaml");
+            _lastImportedPaths = [pkginfoAbs, installerTarget];
+            _lastImportedSubject = $"Import of {pkg.Name} {pkg.Version} into repo";
+
             SaveStatusBar.Severity = InfoBarSeverity.Success;
             SaveStatusBar.Title = "Import complete";
             SaveStatusBar.Message = $"Wrote pkginfo and copied installer for {pkg.Name} {pkg.Version}.";
+            OpenInGitButton.Visibility = Visibility.Visible;
             SaveStatusBar.IsOpen = true;
             ContinueButton.IsEnabled = false; // import already happened — no double-save
         }
@@ -948,6 +1011,24 @@ public sealed partial class ImportPage : Page
         {
             BackButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>
+    /// Navigates to the Git tab and asks it to pre-select the just-imported files
+    /// (pkginfo + installer) and pre-fill the commit subject. The user reviews +
+    /// clicks Commit / Commit & push themselves — we don't auto-commit because the
+    /// user may want to amend, push, or tweak the message.
+    /// </summary>
+    private async void OnOpenInGitClicked(object sender, RoutedEventArgs e)
+    {
+        if (_lastImportedPaths.Count == 0 || App.MainWindowInstance is not { } window)
+        {
+            return;
+        }
+
+        window.NavigateTo("git");
+        var gitPage = App.Resolve<GitPage>();
+        await gitPage.PrepareCommitAsync(_lastImportedPaths, _lastImportedSubject).ConfigureAwait(true);
     }
 
     private static (string Hash, long Size) CopyAndHash(string source, string target)

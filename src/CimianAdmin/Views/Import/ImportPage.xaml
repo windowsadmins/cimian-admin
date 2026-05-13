@@ -96,6 +96,12 @@
                                 Content="Process queue"
                                 Style="{StaticResource AccentButtonStyle}"
                                 Click="OnProcessQueueClicked" />
+                        <Button Grid.Column="2"
+                                x:Name="QueueOpenInGitButton"
+                                Content="Commit batch in Git tab"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Visibility="Collapsed"
+                                Click="OnQueueOpenInGitClicked" />
                     </Grid>
 
                     <Grid ColumnSpacing="8">
@@ -347,7 +353,14 @@
                             <InfoBar x:Name="SaveStatusBar"
                                      IsClosable="False"
                                      IsOpen="False"
-                                     Severity="Informational" />
+                                     Severity="Informational">
+                                <InfoBar.ActionButton>
+                                    <Button x:Name="OpenInGitButton"
+                                            Content="Commit in Git tab"
+                                            Visibility="Collapsed"
+                                            Click="OnOpenInGitClicked" />
+                                </InfoBar.ActionButton>
+                            </InfoBar>
                         </StackPanel>
 
                         <!-- Step 3: install / uninstall scripts. Pivot keeps the wizard

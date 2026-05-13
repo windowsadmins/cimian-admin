@@ -2,6 +2,7 @@ namespace CimianAdmin.ViewModels;
 
 using System.Collections.ObjectModel;
 using CimianAdmin.Core.Models.Packages;
+using CimianAdmin.Core.Models.Search;
 using CimianAdmin.Core.Services;
 using CimianAdmin.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -57,6 +58,14 @@ public sealed partial class PackagesViewModel : ObservableObject
     [ObservableProperty]
     public partial PackagesSortBy SortBy { get; set; } = PackagesSortBy.Name;
 
+    /// <summary>
+    /// Optional criteria predicate from the "Find packages" smart-search dialog.
+    /// Null or empty = no predicate filter. Composes with SearchText (both must
+    /// pass) so users can refine a typed search further.
+    /// </summary>
+    [ObservableProperty]
+    public partial SmartSearchPredicate? SmartPredicate { get; set; }
+
     public PackagesViewModel(IPackageService packageService, IRepositoryService repositoryService)
     {
         ArgumentNullException.ThrowIfNull(packageService);
@@ -100,6 +109,7 @@ public sealed partial class PackagesViewModel : ObservableObject
     partial void OnSearchTextChanged(string value) => ApplyFilter();
     partial void OnGroupByChanged(PackagesGroupBy value) => ApplyFilter();
     partial void OnSortByChanged(PackagesSortBy value) => ApplyFilter();
+    partial void OnSmartPredicateChanged(SmartSearchPredicate? value) => ApplyFilter();
 
     private void ApplyFilter()
     {
@@ -109,12 +119,17 @@ public sealed partial class PackagesViewModel : ObservableObject
         IEnumerable<Package> filtered = _all;
         if (hasSearch)
         {
-            filtered = _all.Where(p =>
+            filtered = filtered.Where(p =>
                 Contains(p.Name, needle) ||
                 Contains(p.DisplayName, needle) ||
                 Contains(p.Description, needle) ||
                 Contains(p.Developer, needle) ||
                 Contains(p.Category, needle));
+        }
+
+        if (SmartPredicate is { } pred && !pred.IsEmpty)
+        {
+            filtered = filtered.Where(p => PackageSmartFilter.Matches(p, pred));
         }
 
         var list = filtered.ToList();

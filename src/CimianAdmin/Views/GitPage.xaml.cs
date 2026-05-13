@@ -746,7 +746,7 @@ public sealed partial class GitPage : Page
         public string Subject => commit.Subject;
         public string AuthorName => commit.AuthorName;
         public string AuthorEmail => commit.AuthorEmail;
-        public string WhenDisplay => commit.When.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+        public string WhenDisplay => commit.When.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
     }
 
     private void OnChangeSelectionChanged(object sender, SelectionChangedEventArgs e)

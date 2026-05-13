@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CimianAdmin.Views.Import.ImportPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Skeleton for the cimiimport-native Import tab. The full wizard arrives in
+        M3+; this scaffold lays out the persistent shape:
+          - Left column: queue of files being imported (drag-drop target)
+          - Middle column: the wizard step pane (will host PickStep / EditStep /
+            ScriptsStep / LocationStep / ReviewStep depending on view-model state)
+          - Right column: live derived facts (file hash, detected metadata,
+            generated YAML preview) plus a warnings strip
+    -->
+    <Grid Padding="20" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="6">
+            <TextBlock Text="Import"
+                       Style="{StaticResource TitleLargeTextBlockStyle}" />
+            <TextBlock Text="Drop installers (MSI / EXE / NUPKG / MSIX) anywhere on this page to start the cimiimport wizard."
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+
+        <!-- Drop-zone placeholder card. Real wizard markup arrives in M3. -->
+        <Border Grid.Row="1"
+                Style="{StaticResource CardStyle}"
+                Shadow="{StaticResource CardShadow}"
+                Translation="0,0,16"
+                AllowDrop="True"
+                DragOver="OnDropZoneDragOver"
+                Drop="OnDropZoneDrop">
+            <Grid>
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="12">
+                    <Viewbox Width="48" Height="48">
+                        <Path Width="24" Height="24" Style="{StaticResource LucidePath}"
+                              Stroke="{ThemeResource TextFillColorTertiaryBrush}"
+                              Data="M21,15 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V15 M17,8 L12,3 L7,8 M12,3 V15" />
+                    </Viewbox>
+                    <TextBlock Text="Drop installer files here"
+                               Style="{StaticResource SubtitleTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Center" />
+                    <Button x:Name="PickFileButton"
+                            Content="Or pick a file…"
+                            HorizontalAlignment="Center"
+                            Click="OnPickFileClicked" />
+                    <TextBlock x:Name="StatusText"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               MaxWidth="420"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

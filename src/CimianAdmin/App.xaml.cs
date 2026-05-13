@@ -45,6 +45,7 @@ public partial class App : Application
                 services.AddTransient<PackagesViewModel>();
                 services.AddTransient<ManifestsViewModel>();
                 services.AddTransient<CatalogsViewModel>();
+                services.AddTransient<Views.Import.ImportViewModel>();
 
                 services.AddTransient<MainWindow>();
 
@@ -54,6 +55,7 @@ public partial class App : Application
                 services.AddTransient<ManifestsPage>();
                 services.AddTransient<CatalogsPage>();
                 services.AddTransient<GitPage>();
+                services.AddTransient<Views.Import.ImportPage>();
 
                 services.AddTransient<PackageEditorWindow>();
                 services.AddTransient<ManifestEditorWindow>();

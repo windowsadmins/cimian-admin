@@ -324,6 +324,7 @@ public sealed partial class MainWindow : Window
     {
         NavRepository.IsEnabled = enabled;
         NavPackages.IsEnabled = enabled;
+        NavImport.IsEnabled = enabled;
         NavManifests.IsEnabled = enabled;
         NavCatalogs.IsEnabled = enabled;
         NavGit.IsEnabled = enabled;
@@ -335,6 +336,7 @@ public sealed partial class MainWindow : Window
         {
             "repository" => NavRepository,
             "packages" => NavPackages,
+            "import" => NavImport,
             "manifests" => NavManifests,
             "catalogs" => NavCatalogs,
             "git" => NavGit,
@@ -351,6 +353,7 @@ public sealed partial class MainWindow : Window
             "packages" => App.Resolve<PackagesPage>(),
             "manifests" => App.Resolve<ManifestsPage>(),
             "catalogs" => App.Resolve<CatalogsPage>(),
+            "import" => App.Resolve<Views.Import.ImportPage>(),
             "git" => App.Resolve<GitPage>(),
             _ => null,
         };

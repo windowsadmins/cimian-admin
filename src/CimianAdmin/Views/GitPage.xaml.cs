@@ -29,6 +29,9 @@ public sealed partial class GitPage : Page
     private List<ChangeRow> _rows = [];
     private bool _suppressBranchChange;
     private ChangeRow? _selectedRow;
+    // Re-ticks the "Last pulled Xm ago" caption from .git/FETCH_HEAD mtime. Once
+    // a minute is plenty — relative time deltas under a minute show as "just now".
+    private Microsoft.UI.Xaml.DispatcherTimer? _lastFetchTimer;
 
     private static readonly Color AddColor = Color.FromArgb(0xFF, 0x4E, 0xC9, 0x70);
     private static readonly Color RemoveColor = Color.FromArgb(0xFF, 0xE7, 0x6F, 0x6F);
@@ -51,11 +54,66 @@ public sealed partial class GitPage : Page
         _manifestService = manifestService;
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _lastFetchTimer ??= new Microsoft.UI.Xaml.DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+        _lastFetchTimer.Tick -= OnLastFetchTimerTick;
+        _lastFetchTimer.Tick += OnLastFetchTimerTick;
+        _lastFetchTimer.Start();
         await RefreshAsync().ConfigureAwait(true);
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (_lastFetchTimer is not null)
+        {
+            _lastFetchTimer.Stop();
+            _lastFetchTimer.Tick -= OnLastFetchTimerTick;
+        }
+    }
+
+    private void OnLastFetchTimerTick(object? sender, object e) => UpdateLastFetchCaption();
+
+    /// <summary>
+    /// Reads <c>.git/FETCH_HEAD</c> mtime and renders the relative-time caption
+    /// (e.g. "Last fetched 3m ago"). FETCH_HEAD is touched by every <c>git fetch</c>
+    /// or <c>git pull</c>, including ones the user runs outside the app — so this
+    /// stays accurate without us tracking state in memory.
+    /// </summary>
+    private void UpdateLastFetchCaption()
+    {
+        if (_info is null || string.IsNullOrEmpty(_info.GitRoot))
+        {
+            LastFetchText.Text = string.Empty;
+            return;
+        }
+
+        var fetchHead = Path.Combine(_info.GitRoot, ".git", "FETCH_HEAD");
+        if (!File.Exists(fetchHead))
+        {
+            LastFetchText.Text = "never fetched";
+            return;
+        }
+
+        var when = File.GetLastWriteTime(fetchHead);
+        LastFetchText.Text = $"Last fetched {FormatRelativeTime(DateTime.Now - when)}";
+    }
+
+    /// <summary>
+    /// Compact git-style relative duration: seconds → <c>just now</c>, otherwise
+    /// the largest non-zero unit only (e.g. <c>3m ago</c>, <c>2h ago</c>, <c>5d ago</c>).
+    /// Caps weeks/months/years at days so the caption never reaches surprising
+    /// units in a long-lived repo.
+    /// </summary>
+    private static string FormatRelativeTime(TimeSpan delta)
+    {
+        if (delta.TotalSeconds < 60) return "just now";
+        if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
+        if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
+        return $"{(int)delta.TotalDays}d ago";
     }
 
     public async Task RefreshAsync()
@@ -109,6 +167,7 @@ public sealed partial class GitPage : Page
         _selectedRow = null;
         RenderChanges();
         ClearDiff();
+        UpdateLastFetchCaption();
     }
 
     private async Task PopulateIdentityAsync()
@@ -344,6 +403,7 @@ public sealed partial class GitPage : Page
         CommitPushButton.IsEnabled = false;
         SelectAllButton.IsEnabled = false;
         SelectNoneButton.IsEnabled = false;
+        LastFetchText.Text = string.Empty;
         ClearDiff();
     }
 

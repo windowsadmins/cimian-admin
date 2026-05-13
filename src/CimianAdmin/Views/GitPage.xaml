@@ -72,6 +72,14 @@
                         <TextBlock Text="Keyboard shortcuts (?)" />
                     </ToolTipService.ToolTip>
                 </Button>
+                <!-- Relative time since the last fetch/pull. Sourced from .git/FETCH_HEAD
+                     mtime so it survives app restarts and reflects fetches done outside
+                     the app (CLI, IDE). Updated on a one-minute timer. -->
+                <TextBlock x:Name="LastFetchText"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           VerticalAlignment="Center"
+                           Margin="6,0,0,0" />
             </StackPanel>
             <TextBlock x:Name="ScopeLine"
                        Style="{StaticResource CaptionTextBlockStyle}"

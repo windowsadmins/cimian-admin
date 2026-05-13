@@ -33,10 +33,17 @@ jobs:
       - name: Checkout CimianTools sibling (for Cimian.Import ProjectReference)
         shell: pwsh
         run: |
-          $siblingRoot = (Resolve-Path "$env:GITHUB_WORKSPACE\..").Path
+          # GITHUB_WORKSPACE is D:\a\<repo>\<repo>\ (double-nested), and the
+          # ProjectReference goes four levels up from src/CimianAdmin/ which
+          # lands at D:\a\. So we go up two from GITHUB_WORKSPACE to D:\a\,
+          # then create packages/CimianTools/ there.
+          $siblingRoot = (Resolve-Path "$env:GITHUB_WORKSPACE\..\..").Path
           $target = Join-Path $siblingRoot 'packages\CimianTools'
           New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
           git clone --depth=1 https://github.com/windowsadmins/cimian.git $target
+          if (-not (Test-Path "$target\shared\import\Cimian.Import.csproj")) {
+            throw "Cimian.Import.csproj not found at expected path: $target\shared\import\Cimian.Import.csproj"
+          }
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

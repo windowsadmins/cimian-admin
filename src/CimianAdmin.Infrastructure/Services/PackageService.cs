@@ -217,6 +217,7 @@ public sealed class PackageService : IPackageService
 
             package.FilePath = filePath;
             package.LastModified = File.GetLastWriteTimeUtc(filePath);
+            package.Created = File.GetCreationTimeUtc(filePath);
             return package;
         }
         catch (Exception ex) when (ex is IOException or YamlDotNet.Core.YamlException)
@@ -237,6 +238,9 @@ public sealed class PackageService : IPackageService
         await File.WriteAllTextAsync(filePath, yaml, cancellationToken).ConfigureAwait(false);
         package.FilePath = filePath;
         package.LastModified = File.GetLastWriteTimeUtc(filePath);
+        // Preserve Created across writes — File.GetCreationTime survives content edits
+        // on NTFS so just re-read it.
+        package.Created = File.GetCreationTimeUtc(filePath);
     }
 
     private static bool Contains(string? haystack, string needle)

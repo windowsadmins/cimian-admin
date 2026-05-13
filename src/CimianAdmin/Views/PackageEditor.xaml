@@ -49,6 +49,11 @@
                                Style="{StaticResource CaptionTextBlockStyle}"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                TextTrimming="CharacterEllipsis" />
+                    <!-- "Created · Modified" caption — populated in code-behind from
+                         Package.Created and Package.LastModified. -->
+                    <TextBlock x:Name="TimestampsText"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock x:Name="DiskChangedIndicator"

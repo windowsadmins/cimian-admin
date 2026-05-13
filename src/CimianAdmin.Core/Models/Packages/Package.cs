@@ -157,6 +157,14 @@ public sealed class Package
     [YamlIgnore]
     public DateTime? LastModified { get; set; }
 
+    /// <summary>
+    /// File creation time (UTC) — when this pkginfo was first written to the repo.
+    /// On NTFS this survives content edits; on FAT-like filesystems it may match
+    /// LastModified.
+    /// </summary>
+    [YamlIgnore]
+    public DateTime? Created { get; set; }
+
     /// <summary>Display name if set, otherwise the package name.</summary>
     [YamlIgnore]
     public string EffectiveDisplayName => string.IsNullOrWhiteSpace(DisplayName) ? Name : DisplayName!;

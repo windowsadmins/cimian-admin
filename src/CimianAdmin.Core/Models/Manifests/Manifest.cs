@@ -47,4 +47,8 @@ public sealed class Manifest
 
     [YamlIgnore]
     public DateTime? LastModified { get; set; }
+
+    /// <summary>File creation time (UTC) — when this manifest file was first written.</summary>
+    [YamlIgnore]
+    public DateTime? Created { get; set; }
 }

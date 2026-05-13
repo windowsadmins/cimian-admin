@@ -138,6 +138,7 @@ public sealed partial class PackageEditor : UserControl
             DisplayNameText.Text = package.EffectiveDisplayName;
             VersionText.Text = string.IsNullOrEmpty(package.Version) ? string.Empty : "Version " + package.Version;
             FilePathText.Text = ToRepoRelativePath(package.FilePath);
+            TimestampsText.Text = FormatTimestamps(package.Created, package.LastModified);
 
             NameField.Text = package.Name;
             DisplayNameField.Text = package.DisplayName ?? string.Empty;
@@ -760,6 +761,25 @@ public sealed partial class PackageEditor : UserControl
         if (!fullPath.StartsWith(repo.RootPath, StringComparison.OrdinalIgnoreCase)) return fullPath;
         var rel = Path.GetRelativePath(repo.RootPath, fullPath);
         return rel.Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    /// <summary>
+    /// Renders the "Created · Modified" caption. Both timestamps are stored as
+    /// UTC; we format in local time with a yyyy-MM-dd HH:mm pattern so it's
+    /// timezone-aware without locale-specific surprises. Empty when both are null.
+    /// </summary>
+    private static string FormatTimestamps(DateTime? created, DateTime? modified)
+    {
+        static string Fmt(DateTime? t) => t is null
+            ? string.Empty
+            : t.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);
+
+        var c = Fmt(created);
+        var m = Fmt(modified);
+        if (string.IsNullOrEmpty(c) && string.IsNullOrEmpty(m)) return string.Empty;
+        if (string.IsNullOrEmpty(c)) return $"Modified {m}";
+        if (string.IsNullOrEmpty(m)) return $"Created {c}";
+        return $"Created {c}  ·  Modified {m}";
     }
 
     private static string BuildUninstallerSummary(Installer step)

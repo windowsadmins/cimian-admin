@@ -29,6 +29,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -37,14 +38,41 @@
                 Grid.Row="1"
                 PlaceholderText="Search packages"
                 Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <!-- Group / sort selectors. Group changes the buckets at the top level;
+                 sort orders the leaves within each bucket. Code-behind owns the
+                 selection bridge so the ComboBox SelectedIndex maps to the enum. -->
+            <Grid Grid.Row="2" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ComboBox Grid.Column="0"
+                          x:Name="GroupByCombo"
+                          HorizontalAlignment="Stretch"
+                          SelectionChanged="OnGroupByChanged">
+                    <ComboBoxItem Content="By category" Tag="Categories" />
+                    <ComboBoxItem Content="By developer" Tag="Developers" />
+                    <ComboBoxItem Content="By directory" Tag="Directories" />
+                    <ComboBoxItem Content="By type" Tag="Types" />
+                    <ComboBoxItem Content="All packages" Tag="None" />
+                </ComboBox>
+                <ComboBox Grid.Column="1"
+                          x:Name="SortByCombo"
+                          HorizontalAlignment="Stretch"
+                          SelectionChanged="OnSortByChanged">
+                    <ComboBoxItem Content="Sort: Name" Tag="Name" />
+                    <ComboBoxItem Content="Sort: Recently modified" Tag="RecentlyModified" />
+                    <ComboBoxItem Content="Sort: Recently created" Tag="RecentlyCreated" />
+                </ComboBox>
+            </Grid>
             <TextBlock
-                Grid.Row="2"
+                Grid.Row="3"
                 x:Name="CountText"
                 Style="{StaticResource CaptionTextBlockStyle}"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
             <muxc:TreeView
-                Grid.Row="3"
+                Grid.Row="4"
                 x:Name="PackagesTree"
                 ItemsSource="{x:Bind ViewModel.RootNodes, Mode=OneWay}"
                 ItemInvoked="OnNodeInvoked"

@@ -26,6 +26,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # CimianAdmin has a ProjectReference to ../../../../packages/CimianTools/shared/import/Cimian.Import.csproj
+      # (sibling submodule layout under the parent Cimian monorepo). CI checks
+      # out cimian-admin in isolation, so we sparse-clone CimianTools out of the
+      # public cimian monorepo and drop it at the expected sibling path.
+      - name: Checkout CimianTools sibling (for Cimian.Import ProjectReference)
+        shell: pwsh
+        run: |
+          $siblingRoot = (Resolve-Path "$env:GITHUB_WORKSPACE\..").Path
+          git clone --depth=1 --filter=blob:none --sparse https://github.com/windowsadmins/cimian.git "$siblingRoot\cimian-monorepo"
+          Push-Location "$siblingRoot\cimian-monorepo"
+          git sparse-checkout set packages/CimianTools
+          Pop-Location
+          New-Item -ItemType Directory -Path "$siblingRoot\packages" -Force | Out-Null
+          Move-Item -Path "$siblingRoot\cimian-monorepo\packages\CimianTools" -Destination "$siblingRoot\packages\CimianTools"
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:

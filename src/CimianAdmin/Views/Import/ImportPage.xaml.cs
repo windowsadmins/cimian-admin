@@ -18,6 +18,7 @@ internal enum WizardStep
 {
     Review = 1,
     EditMetadata = 2,
+    Scripts = 3,
 }
 
 /// <summary>
@@ -37,6 +38,18 @@ public sealed partial class ImportPage : Page
     private WizardStep _step = WizardStep.Review;
     private IReadOnlyList<string> _knownCatalogs = [];
     private IReadOnlyList<string> _knownPackages = [];
+    // Script slots live on PkgsInfo, not InstallerMetadata, so we hold them
+    // separately and stitch everything together when writing the pkginfo in
+    // Step 5. Null means "no script for this slot" (omitted from YAML).
+    private readonly Dictionary<string, string?> _scripts = new(StringComparer.Ordinal)
+    {
+        ["preinstall"] = null,
+        ["postinstall"] = null,
+        ["preuninstall"] = null,
+        ["postuninstall"] = null,
+        ["installcheck"] = null,
+        ["uninstallcheck"] = null,
+    };
 
     public ImportViewModel ViewModel { get; }
 
@@ -286,28 +299,36 @@ public sealed partial class ImportPage : Page
 
     private async void OnContinueClicked(object sender, RoutedEventArgs e)
     {
-        // Pull edits from the previous step (if any) before moving on, so Back can
-        // restore them without losing the user's typing.
-        if (_step == WizardStep.EditMetadata)
+        // Commit edits from the current step before moving on, so a later Back
+        // restores them rather than losing the user's typing.
+        switch (_step)
         {
-            CommitStep2Edits();
-            // Step 3 (scripts) is next — wired up in the M4 follow-up commit.
-            return;
-        }
-
-        if (_step == WizardStep.Review && _metadataBuffer is not null)
-        {
-            await EnterStep2Async().ConfigureAwait(true);
+            case WizardStep.Review when _metadataBuffer is not null:
+                await EnterStep2Async().ConfigureAwait(true);
+                break;
+            case WizardStep.EditMetadata:
+                CommitStep2Edits();
+                EnterStep3();
+                break;
+            case WizardStep.Scripts:
+                CommitStep3Edits();
+                // Step 4 (location + review) is the next slice.
+                break;
         }
     }
 
     private void OnBackClicked(object sender, RoutedEventArgs e)
     {
-        if (_step == WizardStep.EditMetadata)
+        switch (_step)
         {
-            // Capture the user's edits so a forward jump after Back doesn't drop them.
-            CommitStep2Edits();
-            SetStep(WizardStep.Review);
+            case WizardStep.EditMetadata:
+                CommitStep2Edits();
+                SetStep(WizardStep.Review);
+                break;
+            case WizardStep.Scripts:
+                CommitStep3Edits();
+                SetStep(WizardStep.EditMetadata);
+                break;
         }
     }
 
@@ -326,6 +347,10 @@ public sealed partial class ImportPage : Page
         _metadataBuffer = null;
         _templateMatch = null;
         _useTemplate = false;
+        foreach (var key in _scripts.Keys.ToList())
+        {
+            _scripts[key] = null;
+        }
         WizardView.Visibility = Visibility.Collapsed;
         IdleView.Visibility = Visibility.Visible;
         StatusText.Text = string.Empty;
@@ -343,12 +368,14 @@ public sealed partial class ImportPage : Page
         _step = step;
         Step1Panel.Visibility = step == WizardStep.Review ? Visibility.Visible : Visibility.Collapsed;
         Step2Panel.Visibility = step == WizardStep.EditMetadata ? Visibility.Visible : Visibility.Collapsed;
+        Step3Panel.Visibility = step == WizardStep.Scripts ? Visibility.Visible : Visibility.Collapsed;
         BackButton.Visibility = step == WizardStep.Review ? Visibility.Collapsed : Visibility.Visible;
 
         WizardStepLabel.Text = step switch
         {
             WizardStep.Review => "Step 1 of 4 · Review",
             WizardStep.EditMetadata => "Step 2 of 4 · Edit metadata",
+            WizardStep.Scripts => "Step 3 of 4 · Scripts",
             _ => "Wizard",
         };
     }
@@ -463,4 +490,45 @@ public sealed partial class ImportPage : Page
         _metadataBuffer.Catalogs = CatalogsPicker.GetItems();
         _metadataBuffer.BlockingApps = BlockingPicker.GetItems();
     }
+
+    /// <summary>
+    /// Populates the six script editors from <c>_scripts</c> (or the matched
+    /// template's scripts when the user picked "Use template" in Step 1). Empty
+    /// slots stay empty so the YAML emitter omits them in Step 5.
+    /// </summary>
+    private void EnterStep3()
+    {
+        // Slot precedence: whatever the user already typed > template (when
+        // _useTemplate is set) > empty.
+        string Pick(string key, Func<Package, string?> fromTemplate)
+        {
+            if (!string.IsNullOrEmpty(_scripts[key])) return _scripts[key]!;
+            if (_useTemplate && _templateMatch is not null)
+            {
+                return fromTemplate(_templateMatch) ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        PreinstallEditor.ScriptText = Pick("preinstall", p => p.PreinstallScript);
+        PostinstallEditor.ScriptText = Pick("postinstall", p => p.PostinstallScript);
+        PreuninstallEditor.ScriptText = Pick("preuninstall", p => p.PreuninstallScript);
+        PostuninstallEditor.ScriptText = Pick("postuninstall", p => p.PostuninstallScript);
+        InstallCheckEditor.ScriptText = Pick("installcheck", p => p.InstallCheckScript);
+        UninstallCheckEditor.ScriptText = Pick("uninstallcheck", p => p.UninstallCheckScript);
+
+        SetStep(WizardStep.Scripts);
+    }
+
+    private void CommitStep3Edits()
+    {
+        _scripts["preinstall"] = NullIfEmpty(PreinstallEditor.ScriptText);
+        _scripts["postinstall"] = NullIfEmpty(PostinstallEditor.ScriptText);
+        _scripts["preuninstall"] = NullIfEmpty(PreuninstallEditor.ScriptText);
+        _scripts["postuninstall"] = NullIfEmpty(PostuninstallEditor.ScriptText);
+        _scripts["installcheck"] = NullIfEmpty(InstallCheckEditor.ScriptText);
+        _scripts["uninstallcheck"] = NullIfEmpty(UninstallCheckEditor.ScriptText);
+    }
+
+    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 }

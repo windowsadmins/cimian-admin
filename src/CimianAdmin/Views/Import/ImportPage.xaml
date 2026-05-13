@@ -200,6 +200,49 @@
                                                        PlaceholderText="Add a blocking app…" />
                             </StackPanel>
                         </StackPanel>
+
+                        <!-- Step 3: install / uninstall scripts. Pivot keeps the wizard
+                             from getting overwhelmed by six full-size editors stacked. -->
+                        <StackPanel x:Name="Step3Panel" Spacing="10" Visibility="Collapsed">
+                            <TextBlock Text="Scripts"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="Optional PowerShell run by Cimian around install / uninstall. Empty slots are omitted from the pkginfo. Exit-code semantics for the *_check scripts match Munki: 0 means the action is needed."
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" />
+                            <Pivot x:Name="ScriptsPivot">
+                                <PivotItem Header="Pre-install">
+                                    <local:ScriptEditor x:Name="PreinstallEditor"
+                                                         Label="preinstall_script"
+                                                         MinHeight="220" />
+                                </PivotItem>
+                                <PivotItem Header="Post-install">
+                                    <local:ScriptEditor x:Name="PostinstallEditor"
+                                                         Label="postinstall_script"
+                                                         MinHeight="220" />
+                                </PivotItem>
+                                <PivotItem Header="Pre-uninstall">
+                                    <local:ScriptEditor x:Name="PreuninstallEditor"
+                                                         Label="preuninstall_script"
+                                                         MinHeight="220" />
+                                </PivotItem>
+                                <PivotItem Header="Post-uninstall">
+                                    <local:ScriptEditor x:Name="PostuninstallEditor"
+                                                         Label="postuninstall_script"
+                                                         MinHeight="220" />
+                                </PivotItem>
+                                <PivotItem Header="Install check">
+                                    <local:ScriptEditor x:Name="InstallCheckEditor"
+                                                         Label="installcheck_script"
+                                                         MinHeight="220" />
+                                </PivotItem>
+                                <PivotItem Header="Uninstall check">
+                                    <local:ScriptEditor x:Name="UninstallCheckEditor"
+                                                         Label="uninstallcheck_script"
+                                                         MinHeight="220" />
+                                </PivotItem>
+                            </Pivot>
+                        </StackPanel>
                     </Grid>
                 </ScrollViewer>
             </Border>

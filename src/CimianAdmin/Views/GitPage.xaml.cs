@@ -116,6 +116,44 @@ public sealed partial class GitPage : Page
         return $"{(int)delta.TotalDays}d ago";
     }
 
+    /// <summary>
+    /// External entry point: refreshes status, selects the rows whose paths match
+    /// <paramref name="absoluteFilePaths"/>, and pre-fills the commit composer.
+    /// Used by the Import wizard / batch queue to hand off a freshly-imported set
+    /// of files to the Git tab with a sensible default commit message — saves the
+    /// user from manually ticking each one.
+    /// </summary>
+    public async Task PrepareCommitAsync(IReadOnlyList<string> absoluteFilePaths, string subject, string? body = null)
+    {
+        ArgumentNullException.ThrowIfNull(absoluteFilePaths);
+        ArgumentException.ThrowIfNullOrWhiteSpace(subject);
+
+        await RefreshAsync().ConfigureAwait(true);
+        if (_info is null) return;
+
+        // Translate each absolute path to the git-root-relative form that
+        // GitStatusEntry.RelativePath carries; case-insensitive match because
+        // Windows paths often differ in casing between the picker and the
+        // working tree.
+        var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var abs in absoluteFilePaths)
+        {
+            if (string.IsNullOrWhiteSpace(abs)) continue;
+            var rel = Path.GetRelativePath(_info.GitRoot, abs).Replace('\\', '/');
+            wanted.Add(rel);
+        }
+
+        foreach (var row in _rows)
+        {
+            row.IsSelected = wanted.Contains(row.Entry.RelativePath);
+        }
+
+        SubjectBox.Text = subject;
+        BodyBox.Text = body ?? string.Empty;
+        RenderChanges();
+        UpdateCommitEnabled();
+    }
+
     public async Task RefreshAsync()
     {
         var repo = _repositoryService.CurrentRepository;

@@ -54,8 +54,13 @@ public partial class App : Application
                 services.AddTransient<PackagesPage>();
                 services.AddTransient<ManifestsPage>();
                 services.AddTransient<CatalogsPage>();
-                services.AddTransient<GitPage>();
-                services.AddTransient<Views.Import.ImportPage>();
+                // GitPage + ImportPage are singletons so cross-tab handoffs
+                // (Import → Git, Packages drop → Import) operate on the *visible*
+                // page instance instead of a fresh transient that isn't attached
+                // to ContentFrame. As a bonus, in-progress wizard state survives
+                // a brief tab switch.
+                services.AddSingleton<GitPage>();
+                services.AddSingleton<Views.Import.ImportPage>();
 
                 services.AddTransient<PackageEditorWindow>();
                 services.AddTransient<ManifestEditorWindow>();

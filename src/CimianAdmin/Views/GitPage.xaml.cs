@@ -441,7 +441,8 @@ public sealed partial class GitPage : Page
         var enabled = _info is not null && hasSelection && hasSubject;
         CommitButton.IsEnabled = enabled;
         CommitPushButton.IsEnabled = enabled && (_info?.HasUpstream ?? false);
-        CommitOverflowButton.IsEnabled = enabled;
+        AmendCheckBox.IsEnabled = _info is not null;
+        SkipHooksCheckBox.IsEnabled = _info is not null;
     }
 
     private void OnSelectAllClicked(object sender, RoutedEventArgs e)
@@ -827,27 +828,26 @@ public sealed partial class GitPage : Page
 
     private async void OnCommitClicked(object sender, RoutedEventArgs e)
     {
-        await ExecuteCommitAsync(push: false, runHooks: true).ConfigureAwait(true);
+        await ExecuteCommitAsync(push: false).ConfigureAwait(true);
     }
 
     private async void OnCommitPushClicked(object sender, RoutedEventArgs e)
     {
-        await ExecuteCommitAsync(push: true, runHooks: true).ConfigureAwait(true);
+        await ExecuteCommitAsync(push: true).ConfigureAwait(true);
     }
 
-    private async void OnCommitNoVerifyClicked(object sender, RoutedEventArgs e)
-    {
-        // Escape hatch for the rare case where a pre-commit hook needs to be skipped
-        // (e.g. recovering from a hook script bug). Default path always runs hooks.
-        await ExecuteCommitAsync(push: false, runHooks: false).ConfigureAwait(true);
-    }
-
-    private async Task ExecuteCommitAsync(bool push, bool runHooks)
+    private async Task ExecuteCommitAsync(bool push)
     {
         if (_info is null) return;
 
         var paths = _rows.Where(r => r.IsSelected).Select(r => r.Entry.RelativePath).ToList();
         if (paths.Count == 0) return;
+
+        // Read the per-commit toggles. Amend rewrites the previous commit; skip-hooks
+        // passes --no-verify. Both default to off, so the typical commit path is
+        // unchanged.
+        var runHooks = SkipHooksCheckBox.IsChecked != true;
+        var amend = AmendCheckBox.IsChecked == true;
 
         CommitButton.IsEnabled = false;
         CommitPushButton.IsEnabled = false;
@@ -869,14 +869,18 @@ public sealed partial class GitPage : Page
             var subject = SubjectBox.Text.Trim();
             var body = string.IsNullOrWhiteSpace(BodyBox.Text) ? null : BodyBox.Text.TrimEnd();
 
-            ProgressTitle.Text = runHooks
-                ? "Running pre-commit hooks and committing…"
-                : "Committing (hooks skipped)…";
+            ProgressTitle.Text = (amend, runHooks) switch
+            {
+                (true, true) => "Amending previous commit…",
+                (true, false) => "Amending previous commit (hooks skipped)…",
+                (false, false) => "Committing (hooks skipped)…",
+                _ => "Running pre-commit hooks and committing…",
+            };
 
             GitCommitResult commit;
             try
             {
-                commit = await _gitService.CommitAsync(_info, subject, body, runHooks, progress).ConfigureAwait(true);
+                commit = await _gitService.CommitAsync(_info, subject, body, runHooks, amend, progress).ConfigureAwait(true);
             }
             catch (Exception ex)
             {
@@ -923,6 +927,10 @@ public sealed partial class GitPage : Page
 
             SubjectBox.Text = string.Empty;
             BodyBox.Text = string.Empty;
+            // Reset Amend after a successful commit so the next one doesn't silently
+            // rewrite it; leave Skip-hooks as the user set it since it's not nearly
+            // as destructive when accidentally re-applied.
+            AmendCheckBox.IsChecked = false;
             await RefreshAfterCommitAsync().ConfigureAwait(true);
         }
         finally
@@ -985,7 +993,7 @@ public sealed partial class GitPage : Page
     {
         if (!CommitButton.IsEnabled) return;
         args.Handled = true;
-        _ = ExecuteCommitAsync(push: false, runHooks: true);
+        _ = ExecuteCommitAsync(push: false);
     }
 
     /// <summary>

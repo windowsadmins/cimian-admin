@@ -41,7 +41,7 @@ public interface IGitService
     /// <paramref name="progress"/> receives each line of stdout/stderr as it streams,
     /// so the UI can show live hook output instead of sitting silent.
     /// </summary>
-    Task<GitCommitResult> CommitAsync(GitRepositoryInfo info, string subject, string? body, bool runHooks, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+    Task<GitCommitResult> CommitAsync(GitRepositoryInfo info, string subject, string? body, bool runHooks, bool amend = false, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Pushes the current branch to its configured upstream. Shells out to

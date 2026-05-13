@@ -41,11 +41,11 @@ public sealed class GitService : IGitService
         return Task.Run(() => StageCore(info, paths), cancellationToken);
     }
 
-    public Task<GitCommitResult> CommitAsync(GitRepositoryInfo info, string subject, string? body, bool runHooks, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+    public Task<GitCommitResult> CommitAsync(GitRepositoryInfo info, string subject, string? body, bool runHooks, bool amend = false, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentException.ThrowIfNullOrWhiteSpace(subject);
-        return Task.Run(() => CommitCore(info, subject, body, runHooks, progress), cancellationToken);
+        return Task.Run(() => CommitCore(info, subject, body, runHooks, amend, progress), cancellationToken);
     }
 
     public Task<GitPushResult> PushAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
@@ -315,10 +315,11 @@ public sealed class GitService : IGitService
         Commands.Stage(repo, relativePaths);
     }
 
-    private static GitCommitResult CommitCore(GitRepositoryInfo info, string subject, string? body, bool runHooks, IProgress<string>? progress)
+    private static GitCommitResult CommitCore(GitRepositoryInfo info, string subject, string? body, bool runHooks, bool amend, IProgress<string>? progress)
     {
         var args = new List<string> { "commit" };
         if (!runHooks) args.Add("--no-verify");
+        if (amend) args.Add("--amend");
         args.Add("-m");
         args.Add(subject);
         if (!string.IsNullOrWhiteSpace(body))

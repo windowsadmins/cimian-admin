@@ -1,4 +1,4 @@
-# CimianAdmin uninstall
+# CimianStudio uninstall
 #
 # Fires only on standalone uninstall — cimipkg conditions this CA with
 # `(REMOVE="ALL") AND NOT UPGRADINGPRODUCTCODE`, so it does NOT run during
@@ -6,15 +6,15 @@
 # re-create whatever this tears down).
 $ErrorActionPreference = 'Continue'
 
-Write-Host "CimianAdmin uninstall: phase=$($env:CIMIAN_PHASE) version=$($env:CIMIAN_VERSION)" -ForegroundColor Yellow
+Write-Host "CimianStudio uninstall: phase=$($env:CIMIAN_PHASE) version=$($env:CIMIAN_VERSION)" -ForegroundColor Yellow
 
-# 1. Terminate any running CimianAdmin.exe so RemoveFiles isn't blocked.
+# 1. Terminate any running CimianStudio.exe so RemoveFiles isn't blocked.
 try {
-    $procs = Get-Process -Name 'CimianAdmin' -ErrorAction SilentlyContinue
+    $procs = Get-Process -Name 'CimianStudio' -ErrorAction SilentlyContinue
     if ($procs) {
         $procs | Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
-        try { & taskkill /F /IM CimianAdmin.exe /T 2>$null } catch { }
+        try { & taskkill /F /IM CimianStudio.exe /T 2>$null } catch { }
     }
 } catch {
     Write-Warning "Process termination had non-fatal errors: $_"
@@ -26,7 +26,7 @@ try {
 # Start Menu doesn't show an empty Cimian group.
 try {
     $startMenuPath = 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Cimian'
-    $shortcutPath = Join-Path $startMenuPath 'CimianAdmin.lnk'
+    $shortcutPath = Join-Path $startMenuPath 'CimianStudio.lnk'
     if (Test-Path $shortcutPath) {
         Remove-Item -Path $shortcutPath -Force -ErrorAction Stop
         Write-Host "Removed Start Menu shortcut: $shortcutPath"
@@ -39,10 +39,10 @@ try {
     Write-Warning "Failed to remove Start Menu shortcut: $_"
 }
 
-# 3. Remove HKLM\SOFTWARE\Cimian\CimianAdmin registry stamp. The parent
+# 3. Remove HKLM\SOFTWARE\Cimian\CimianStudio registry stamp. The parent
 # HKLM\SOFTWARE\Cimian key is owned by CimianTools — leave it alone.
 try {
-    $registryPath = 'HKLM:\SOFTWARE\Cimian\CimianAdmin'
+    $registryPath = 'HKLM:\SOFTWARE\Cimian\CimianStudio'
     if (Test-Path $registryPath) {
         Remove-Item -Path $registryPath -Recurse -Force -ErrorAction Stop
         Write-Host "Removed $registryPath"
@@ -51,5 +51,5 @@ try {
     Write-Warning "Failed to remove registry key: $_"
 }
 
-Write-Host 'CimianAdmin uninstall completed' -ForegroundColor Yellow
+Write-Host 'CimianStudio uninstall completed' -ForegroundColor Yellow
 exit 0

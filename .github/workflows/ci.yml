@@ -26,15 +26,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # CimianAdmin has a ProjectReference to ../../../../packages/CimianTools/shared/import/Cimian.Import.csproj
+      # CimianStudio has a ProjectReference to ../../../../packages/CimianTools/shared/import/Cimian.Import.csproj
       # (the sibling-submodule layout we use locally under a parent Cimian folder).
-      # CI checks out cimian-admin in isolation, so clone the public cimian repo
+      # CI checks out cimianstudio in isolation, so clone the public cimian repo
       # directly into the slot the ProjectReference expects.
       - name: Checkout CimianTools sibling (for Cimian.Import ProjectReference)
         shell: pwsh
         run: |
           # GITHUB_WORKSPACE is D:\a\<repo>\<repo>\ (double-nested), and the
-          # ProjectReference goes four levels up from src/CimianAdmin/ which
+          # ProjectReference goes four levels up from src/CimianStudio/ which
           # lands at D:\a\. So we go up two from GITHUB_WORKSPACE to D:\a\,
           # then create packages/CimianTools/ there.
           $siblingRoot = (Resolve-Path "$env:GITHUB_WORKSPACE\..\..").Path
@@ -62,13 +62,13 @@ jobs:
             nuget-${{ runner.os }}-
 
       - name: Restore
-        run: dotnet restore CimianAdmin.sln
+        run: dotnet restore CimianStudio.sln
 
       - name: Build
-        run: dotnet build CimianAdmin.sln --configuration Release --no-restore --verbosity minimal
+        run: dotnet build CimianStudio.sln --configuration Release --no-restore --verbosity minimal
 
       - name: Test
-        run: dotnet test CimianAdmin.sln --configuration Release --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
+        run: dotnet test CimianStudio.sln --configuration Release --no-restore --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
 
       - name: Upload test results
         if: always()

@@ -1,13 +1,13 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Builds, signs, and (optionally) launches CimianAdmin.
+    Builds, signs, and (optionally) launches CimianStudio.
 
 .DESCRIPTION
     Mirrors the structure of `packages/CimianTools/build.ps1` but scoped to this single
     WinUI 3 app. Looks up the enterprise code-signing certificate by subject (defaults to
     "EmilyCarrU", overridable via $env:CIMIAN_CERT_SUBJECT), runs `dotnet build` against
-    the WinUI csproj, signs the produced CimianAdmin.exe with signtool + a trusted RFC3161
+    the WinUI csproj, signs the produced CimianStudio.exe with signtool + a trusted RFC3161
     timestamp, and optionally launches the freshly-signed binary.
 
     Defender Exploit Guard's ASR rule "Block executable files from running unless they
@@ -16,7 +16,7 @@
     criterion, so this script is the supported way to launch local dev builds.
 
 .PARAMETER Sign
-    Sign the produced CimianAdmin.exe (default).
+    Sign the produced CimianStudio.exe (default).
 
 .PARAMETER NoSign
     Skip signing. The binary will be blocked by ASR on this machine — use only when
@@ -36,7 +36,7 @@
     Delete bin/obj before building.
 
 .PARAMETER Run
-    Launch CimianAdmin.exe after a successful (signed) build.
+    Launch CimianStudio.exe after a successful (signed) build.
 
 .PARAMETER Release
     Run the full release pipeline locally: `dotnet publish` per arch (x64 +
@@ -131,11 +131,11 @@ $script:ScriptBoundParameters = $PSBoundParameters
 $Global:EnterpriseCertSubject = $env:CIMIAN_CERT_SUBJECT ?? 'EmilyCarrU'
 
 $repoRoot = $PSScriptRoot
-$csproj = Join-Path $repoRoot 'src\CimianAdmin\CimianAdmin.csproj'
+$csproj = Join-Path $repoRoot 'src\CimianStudio\CimianStudio.csproj'
 $rid = if ($Architecture -eq 'arm64') { 'win-arm64' } else { 'win-x64' }
 $tfm = 'net10.0-windows10.0.19041.0'
-$binDir = Join-Path $repoRoot "src\CimianAdmin\bin\$Configuration\$tfm\$rid"
-$exePath = Join-Path $binDir 'CimianAdmin.exe'
+$binDir = Join-Path $repoRoot "src\CimianStudio\bin\$Configuration\$tfm\$rid"
+$exePath = Join-Path $binDir 'CimianStudio.exe'
 
 # Sign by default unless -NoSign was passed.
 $shouldSign = -not $NoSign
@@ -395,8 +395,8 @@ function Invoke-Clean {
 }
 
 function Stop-RunningApp {
-    Get-Process -Name CimianAdmin -ErrorAction SilentlyContinue | ForEach-Object {
-        Write-BuildLog "Stopping CimianAdmin PID $($_.Id) so the build can replace its files"
+    Get-Process -Name CimianStudio -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-BuildLog "Stopping CimianStudio PID $($_.Id) so the build can replace its files"
         $_ | Stop-Process -Force
     }
 }
@@ -550,16 +550,16 @@ function Invoke-ReleaseForArch {
         -o $publishDir
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $Arch" }
 
-    # 2. Sign all CimianAdmin-shipped binaries in the publish tree. We
+    # 2. Sign all CimianStudio-shipped binaries in the publish tree. We
     # deliberately leave Microsoft.* / Windows App SDK runtime DLLs alone —
     # those are already MS-signed and re-signing them invalidates that.
     if ($SignThumbprint) {
-        $bins = Get-ChildItem -Path $publishDir -Include 'CimianAdmin.exe', 'CimianAdmin*.dll', 'Cimian.*.dll', 'CimianAdmin.Core.dll', 'CimianAdmin.Infrastructure.dll', 'CimianAdmin.Shared.dll' -Recurse -File |
+        $bins = Get-ChildItem -Path $publishDir -Include 'CimianStudio.exe', 'CimianStudio*.dll', 'Cimian.*.dll', 'CimianStudio.Core.dll', 'CimianStudio.Infrastructure.dll', 'CimianStudio.Shared.dll' -Recurse -File |
             Select-Object -ExpandProperty FullName
         if ($bins.Count -gt 0) {
             Invoke-SignArtifacts -Paths $bins -Thumbprint $SignThumbprint -Store $SignStore
         } else {
-            Write-BuildLog "No CimianAdmin binaries matched the sign filter — check publish output." 'WARNING'
+            Write-BuildLog "No CimianStudio binaries matched the sign filter — check publish output." 'WARNING'
         }
     }
 
@@ -580,7 +580,7 @@ function Invoke-ReleaseForArch {
     if ($LASTEXITCODE -ne 0) { throw "cimipkg MSI build failed for $Arch" }
     $msi = Get-ChildItem "$stagingDir\build\*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $msi) { throw "MSI output not found for $Arch" }
-    $msiDest = Join-Path $releaseDir "CimianAdmin-$Arch-$ReleaseVersion.msi"
+    $msiDest = Join-Path $releaseDir "CimianStudio-$Arch-$ReleaseVersion.msi"
     Move-Item $msi.FullName $msiDest -Force
 
     # 5. Sign the MSI itself so SmartScreen / GPO trust it as a unit.
@@ -598,12 +598,12 @@ function Invoke-ReleaseForArch {
     } else {
         $nupkg = Get-ChildItem "$stagingDir\build\*.nupkg" -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($nupkg) {
-            Move-Item $nupkg.FullName (Join-Path $releaseDir "CimianAdmin-$Arch-$ReleaseVersion.nupkg") -Force
+            Move-Item $nupkg.FullName (Join-Path $releaseDir "CimianStudio-$Arch-$ReleaseVersion.nupkg") -Force
         }
     }
 
     # 7. Raw publish zip — mirrors what the CI release.yml uploads.
-    Compress-Archive -Path "$publishDir\*" -DestinationPath (Join-Path $releaseDir "CimianAdmin-$Arch.zip") -Force
+    Compress-Archive -Path "$publishDir\*" -DestinationPath (Join-Path $releaseDir "CimianStudio-$Arch.zip") -Force
 
     Write-BuildLog "Done with $Arch." 'SUCCESS'
     return $msiDest
@@ -714,10 +714,10 @@ subject, or pass -NoSign if you can launch unsigned binaries on this machine.
         # Sign the apphost AND the companion DLLs in one shot — single UAC prompt
         # via sudo, no per-file elevation churn.
         $toSign = @($exePath) + (@(
-            'CimianAdmin.dll',
-            'CimianAdmin.Core.dll',
-            'CimianAdmin.Infrastructure.dll',
-            'CimianAdmin.Shared.dll'
+            'CimianStudio.dll',
+            'CimianStudio.Core.dll',
+            'CimianStudio.Infrastructure.dll',
+            'CimianStudio.Shared.dll'
         ) | ForEach-Object { Join-Path $binDir $_ } | Where-Object { Test-Path $_ })
 
         Invoke-SignArtifacts -Paths $toSign -Thumbprint $Thumbprint -Store $store

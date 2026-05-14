@@ -1,12 +1,12 @@
 # Plan — cimiimport integration
 
 Status: planning (not yet implemented)
-Owner: CimianAdmin
+Owner: CimianStudio
 Related CLI: `packages/CimianTools/cli/cimiimport/Program.cs`
 
 ## Goal
 
-Bring MunkiAdmin-style "drag an installer onto the app and import it" into CimianAdmin. The user picks an `.msi` / `.exe` / `.nupkg` / `.msix`; the app shells out to `cimiimport.exe --nointeractive`, captures stdout/stderr, and lands the user in the new pkginfo editor.
+Bring MunkiAdmin-style "drag an installer onto the app and import it" into CimianStudio. The user picks an `.msi` / `.exe` / `.nupkg` / `.msix`; the app shells out to `cimiimport.exe --nointeractive`, captures stdout/stderr, and lands the user in the new pkginfo editor.
 
 ## Why shell out vs. reimplement
 
@@ -43,8 +43,8 @@ UI:
   - "Import" / "Cancel" buttons
 
 Backend:
-- New service `IImportService` in `CimianAdmin.Core` with `Task<ImportResult> RunImportAsync(ImportOptions options, IProgress<string>? progress)`.
-- Implementation in `CimianAdmin.Infrastructure/Services/ImportService.cs`:
+- New service `IImportService` in `CimianStudio.Core` with `Task<ImportResult> RunImportAsync(ImportOptions options, IProgress<string>? progress)`.
+- Implementation in `CimianStudio.Infrastructure/Services/ImportService.cs`:
   - Resolves `cimiimport.exe` via the same `ResolveTool` helper `CatalogService` uses.
   - Builds `ProcessStartInfo.ArgumentList` from options (always includes `--nointeractive` + `--repo_path`).
   - Streams stdout/stderr line-by-line into `IProgress<string>`.

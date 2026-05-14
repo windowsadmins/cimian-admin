@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CimianStudio.Shared</RootNamespace>
+    <AssemblyName>CimianStudio.Shared</AssemblyName>
+  </PropertyGroup>
+</Project>

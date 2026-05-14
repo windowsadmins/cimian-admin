@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>CimianStudio.Infrastructure</RootNamespace>
+    <AssemblyName>CimianStudio.Infrastructure</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+    <PackageReference Include="LibGit2Sharp" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CimianStudio.Core\CimianStudio.Core.csproj" />
+    <ProjectReference Include="..\CimianStudio.Shared\CimianStudio.Shared.csproj" />
+  </ItemGroup>
+</Project>

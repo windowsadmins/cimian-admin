@@ -1,8 +1,8 @@
 product:
-  name: CimianAdmin
+  name: CimianStudio
   version: ${TIMESTAMP}
   developer: EmilyCarrU
-  identifier: ca.emilycarru.winadmins.${ARCH}.CimianAdmin
+  identifier: ca.emilycarru.winadmins.${ARCH}.CimianStudio
   description: WinUI 3 administrator dashboard for Cimian-managed devices.
 postinstall_action: script
-install_location: 'C:\Program Files\CimianAdmin'
+install_location: 'C:\Program Files\CimianStudio'

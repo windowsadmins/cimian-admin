@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # CimianAdmin has a ProjectReference to ../../../../packages/CimianTools/shared/import/Cimian.Import.csproj.
+      # CimianStudio has a ProjectReference to ../../../../packages/CimianTools/shared/import/Cimian.Import.csproj.
       # Clone the public cimian repo directly into that sibling slot.
       - name: Checkout CimianTools sibling (for Cimian.Import ProjectReference)
         shell: pwsh
@@ -63,7 +63,7 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           foreach ($arch in @("x64", "arm64")) {
             $rid = "win-$arch"
-            dotnet publish src/CimianAdmin/CimianAdmin.csproj `
+            dotnet publish src/CimianStudio/CimianStudio.csproj `
               -c Release -r $rid `
               -p:Platform=$($arch.ToUpper()) `
               -p:Version=$version `
@@ -122,18 +122,18 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "cimipkg MSI build failed for $arch" }
 
             $msi = Get-ChildItem "$stagingDir/build/*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($msi) { Move-Item $msi.FullName "release/CimianAdmin-$arch-$version.msi" -Force }
+            if ($msi) { Move-Item $msi.FullName "release/CimianStudio-$arch-$version.msi" -Force }
 
             & .\tools\cimipkg.exe --nupkg --verbose $stagingDir
             $nupkg = Get-ChildItem "$stagingDir/build/*.nupkg" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($nupkg) { Move-Item $nupkg.FullName "release/CimianAdmin-$arch-$version.nupkg" -Force }
+            if ($nupkg) { Move-Item $nupkg.FullName "release/CimianStudio-$arch-$version.nupkg" -Force }
           }
 
       - name: Prepare release zips
         shell: pwsh
         run: |
           foreach ($arch in @("x64", "arm64")) {
-            Compress-Archive -Path "publish/$arch/*" -DestinationPath "release/CimianAdmin-$arch.zip" -Force
+            Compress-Archive -Path "publish/$arch/*" -DestinationPath "release/CimianStudio-$arch.zip" -Force
           }
 
       - name: Create GitHub Release
@@ -142,7 +142,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = '${{ github.ref_name }}'
-          $title = "CimianAdmin $tag"
+          $title = "CimianStudio $tag"
           $dotnet = (dotnet --version).Trim()
           $os = (Get-CimInstance Win32_OperatingSystem).Caption.Trim()
           $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
@@ -168,7 +168,7 @@ jobs:
           }
 
           # Sign the MSI installers (run separately, after binaries are signed and repackaged)
-          Get-ChildItem -Filter "CimianAdmin-*.msi" | ForEach-Object {
+          Get-ChildItem -Filter "CimianStudio-*.msi" | ForEach-Object {
               signtool sign /fd SHA256 /tr `$timestampUrl /td SHA256 /n `$cert `$_.FullName
           }
           ``````

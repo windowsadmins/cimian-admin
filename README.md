@@ -1,8 +1,8 @@
-# CimianAdmin
+# CimianStudio
 
 A modern Windows GUI application for managing Cimian software deployment repositories.
 
-CimianAdmin provides a graphical interface similar to MunkiAdmin (macOS) but designed specifically for Windows and Cimian repositories. It allows IT administrators to efficiently manage software packages, manifests, and catalogs for enterprise software deployment.
+CimianStudio provides a graphical interface similar to MunkiAdmin (macOS) but designed specifically for Windows and Cimian repositories. It allows IT administrators to efficiently manage software packages, manifests, and catalogs for enterprise software deployment.
 
 ## Features
 
@@ -28,8 +28,8 @@ CimianAdmin provides a graphical interface similar to MunkiAdmin (macOS) but des
 2. Clone this repository:
 
 ```powershell
-git clone https://github.com/windowsadmins/cimianadmin.git
-cd cimianadmin
+git clone https://github.com/windowsadmins/cimianstudio.git
+cd cimianstudio
 ```
 
 ### Building
@@ -41,21 +41,21 @@ dotnet build
 ### Running
 
 ```powershell
-dotnet run --project src/CimianAdmin
+dotnet run --project src/CimianStudio
 ```
 
 ## Project Structure
 
 ```
-CimianAdmin/
+CimianStudio/
   src/
-    CimianAdmin/              # WinUI 3 application
-    CimianAdmin.Core/         # Domain models and service interfaces
-    CimianAdmin.Infrastructure/  # YAML parsing, file system, tools integration
-    CimianAdmin.Shared/       # Shared constants and utilities
+    CimianStudio/              # WinUI 3 application
+    CimianStudio.Core/         # Domain models and service interfaces
+    CimianStudio.Infrastructure/  # YAML parsing, file system, tools integration
+    CimianStudio.Shared/       # Shared constants and utilities
   tests/
-    CimianAdmin.Core.Tests/
-    CimianAdmin.Infrastructure.Tests/
+    CimianStudio.Core.Tests/
+    CimianStudio.Infrastructure.Tests/
   samples/
     SampleRepository/         # Example Cimian repository for testing
   docs/

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="CimianStudio.Views.ChipListPicker"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <UserControl.Resources>
+        <Style x:Key="HChipRowStyle" TargetType="ListViewItem">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel Spacing="6">
+        <AutoSuggestBox x:Name="Picker"
+                        QueryIcon="Find"
+                        TextChanged="OnPickerTextChanged"
+                        SuggestionChosen="OnPickerSuggestionChosen"
+                        QuerySubmitted="OnPickerQuerySubmitted" />
+        <ListView x:Name="ChipsHost"
+                  SelectionMode="None"
+                  CanReorderItems="True"
+                  AllowDrop="True"
+                  CanDragItems="True"
+                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                  ItemContainerStyle="{StaticResource HChipRowStyle}"
+                  DragItemsCompleted="OnChipsReordered">
+            <!-- Non-virtualizing StackPanel so chips render reliably inside outer ScrollViewers. -->
+            <ListView.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ListView.ItemsPanel>
+        </ListView>
+    </StackPanel>
+</UserControl>

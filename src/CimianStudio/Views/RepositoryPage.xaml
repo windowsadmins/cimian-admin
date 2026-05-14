@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CimianStudio.Views.RepositoryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Page.Resources>
+        <DataTemplate x:Key="RecentRowTemplate" x:DataType="x:String">
+            <TextBlock Text="{x:Bind}" TextTrimming="CharacterEllipsis" Padding="4,2,4,2" />
+        </DataTemplate>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <Grid Padding="32" RowSpacing="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Spacing="4">
+                <TextBlock
+                    x:Name="RepoNameText"
+                    Style="{StaticResource TitleLargeTextBlockStyle}" />
+                <TextBlock
+                    x:Name="RepoPathText"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <Grid Grid.Row="1" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         x:Name="SearchBox"
+                         PlaceholderText="Search packages and manifests content"
+                         TextChanged="OnSearchTextChanged" />
+                <Border Grid.Column="1"
+                        x:Name="IndexingPill"
+                        Visibility="Collapsed"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10,4,10,4"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="IndexingPillText"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="2"
+                    x:Name="SearchResultsCard"
+                    Visibility="Collapsed"
+                    Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
+                    Padding="20,12,20,12">
+                <StackPanel Spacing="8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   x:Name="SearchResultsHeader"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Grid.Column="1"
+                                   x:Name="SearchResultsCount"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                    <ListView x:Name="SearchResultsList"
+                              SelectionMode="None"
+                              IsItemClickEnabled="True"
+                              ItemClick="OnSearchResultClicked"
+                              MaxHeight="360" />
+                </StackPanel>
+            </Border>
+
+            <ItemsControl
+                Grid.Row="3"
+                x:Name="StatsHost">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="16" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+
+            <Grid Grid.Row="4" ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
+                        Padding="20,16,20,12">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Recently modified pkginfo"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <ListView x:Name="RecentPackagesList"
+                                  SelectionMode="None"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="OnRecentPackageClicked"
+                                  MaxHeight="220"
+                                  ItemTemplate="{StaticResource RecentRowTemplate}" />
+                        <TextBlock x:Name="NoRecentPackagesText"
+                                   Text="No recently modified packages."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   Visibility="Collapsed" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
+                        Padding="20,16,20,12">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Recently modified manifests"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <ListView x:Name="RecentManifestsList"
+                                  SelectionMode="None"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="OnRecentManifestClicked"
+                                  MaxHeight="220"
+                                  ItemTemplate="{StaticResource RecentRowTemplate}" />
+                        <TextBlock x:Name="NoRecentManifestsText"
+                                   Text="No recently modified manifests."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   Visibility="Collapsed" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="5"
+                    x:Name="GitStatusCard"
+                    Visibility="Collapsed"
+                    Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16"
+                    Padding="20,12,12,12">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock x:Name="GitStatusTitle"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock x:Name="GitStatusScope"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <HyperlinkButton Grid.Column="1"
+                                     x:Name="OpenGitTabButton"
+                                     Content="Open Git tab"
+                                     Click="OnOpenGitTabClicked" />
+                </Grid>
+            </Border>
+
+            <Button
+                Grid.Row="6"
+                Content="Validate repository"
+                Click="OnValidateClicked"
+                HorizontalAlignment="Left" />
+
+            <InfoBar
+                Grid.Row="7"
+                x:Name="ValidationBar"
+                IsClosable="False"
+                IsOpen="False" />
+
+            <ScrollViewer Grid.Row="8" MaxHeight="240">
+                <ItemsControl x:Name="ValidationDetails">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{x:Bind}" TextWrapping="Wrap" Margin="0,2,0,2" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </ScrollViewer>
+</Page>

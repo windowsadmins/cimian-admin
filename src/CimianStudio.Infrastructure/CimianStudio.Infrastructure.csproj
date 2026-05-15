@@ -16,6 +16,12 @@
   <ItemGroup>
     <ProjectReference Include="..\CimianStudio.Core\CimianStudio.Core.csproj" />
     <ProjectReference Include="..\CimianStudio.Shared\CimianStudio.Shared.csproj" />
+    <!-- Cimian.Core hosts YamlUtils — the single source of truth for pkginfo /
+         manifest / catalog YAML across every Cimian tool and CimianStudio. See
+         shared/core/Services/YamlUtils.cs upstream. Same sibling-submodule path
+         convention as CimianStudio.csproj's Cimian.Import reference. -->
+    <ProjectReference Include="..\..\..\..\packages\CimianTools\shared\core\Cimian.Core.csproj"
+                      Private="true" />
   </ItemGroup>
 
   <ItemGroup>

@@ -75,7 +75,12 @@ public sealed class Package
     [YamlMember(Alias = "uninstallable")]
     public bool? Uninstallable { get; set; }
 
-    [YamlMember(Alias = "OnDemand")]
+    // Per-field OmitDefaults matches the upstream makepkginfo PkgsInfo model
+    // and the in-the-wild convention: `OnDemand: true` appears in 7+ live
+    // pkginfo files; not a single file emits `OnDemand: false`. Without this,
+    // every pkginfo CimianStudio writes would gain a spurious `OnDemand: false`
+    // line on save.
+    [YamlMember(Alias = "OnDemand", DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
     public bool OnDemand { get; set; }
 
     // -------- requirements --------

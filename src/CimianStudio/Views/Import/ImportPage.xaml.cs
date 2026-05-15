@@ -4,6 +4,7 @@ using Cimian.CLI.Cimiimport.Models;
 using Cimian.CLI.Cimiimport.Services;
 using CimianStudio.Core.Models.Packages;
 using CimianStudio.Core.Services;
+using CimianStudio.Infrastructure.Import;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
@@ -303,10 +304,12 @@ public sealed partial class ImportPage : Page
     }
 
     /// <summary>
-    /// Non-interactive import for one queue item: re-extracts metadata, applies
-    /// template inheritance if a name match exists, hashes + copies the installer,
-    /// then writes the pkginfo. Mirrors the wizard's Step 4 save logic but with
-    /// the user-chosen batch defaults instead of edited values.
+    /// Non-interactive import for one queue item: hands off to upstream
+    /// <see cref="ImportService.ImportAsync"/> with batch-default values held
+    /// in a <see cref="WinUIImportPrompter"/>. ImportService does the
+    /// extraction, template lookup, hash, copy, and pkginfo write; this
+    /// method just wires up the inputs and surfaces per-item status into the
+    /// queue list view.
     /// </summary>
     private async Task<List<string>> ProcessQueueItemAsync(
         ImportViewModel.QueueItem item,
@@ -315,22 +318,23 @@ public sealed partial class ImportPage : Page
         string subdir)
     {
         var filePath = item.FilePath;
+        var subdirNormalized = (subdir ?? string.Empty).Trim().Trim('/', '\\').Replace('\\', '/');
 
-        // Extract metadata off the UI thread (Wix DTF interop can stall).
+        item.StatusText = "Extracting metadata…";
+
+        // Pre-extract once so we know the output paths to return for the Git
+        // hand-off. ImportService also extracts internally — small duplicate
+        // cost, but cleaner than scanning disk after the write.
         var meta = await Task.Run(() =>
         {
             var extractor = new MetadataExtractor();
-            return extractor.ExtractMetadata(filePath, new ImportConfiguration
-            {
-                RepoPath = repo.RootPath,
-            });
+            return extractor.ExtractMetadata(filePath, new ImportConfiguration { RepoPath = repo.RootPath });
         }).ConfigureAwait(true);
 
         if (meta is null)
         {
             throw new InvalidOperationException("Metadata extractor returned no result.");
         }
-
         if (string.IsNullOrEmpty(meta.ID))
         {
             meta.ID = Path.GetFileNameWithoutExtension(filePath);
@@ -342,78 +346,53 @@ public sealed partial class ImportPage : Page
             meta.Architecture = filenameArch;
             meta.SupportedArch = [filenameArch];
         }
-
         if (!string.IsNullOrEmpty(defaultCatalog) && meta.Catalogs.Count == 0)
         {
             meta.Catalogs = [defaultCatalog];
         }
 
-        // Template inherit: pull catalogs/scripts/blocking_apps from an existing
-        // package with the same name (matches the wizard's "Use template" path,
-        // but auto-applied in batch mode for parity with cimiimport's defaults).
-        var all = await _packageService.GetAllPackagesAsync().ConfigureAwait(true);
-        var template = all.FirstOrDefault(p => string.Equals(p.Name, meta.ID, StringComparison.OrdinalIgnoreCase));
+        item.StatusText = "Importing…";
 
-        item.StatusText = "Hashing and copying installer…";
-        var ext = Path.GetExtension(filePath);
-        var fileBase = $"{meta.ID}-{meta.Version}";
-        var installerTarget = string.IsNullOrEmpty(subdir)
-            ? Path.Combine(repo.PkgsPath, $"{fileBase}{ext}")
-            : Path.Combine(repo.PkgsPath, subdir.Replace('/', Path.DirectorySeparatorChar), $"{fileBase}{ext}");
-        Directory.CreateDirectory(Path.GetDirectoryName(installerTarget)!);
+        // Batch always inherits from a name-match template if one exists; that's
+        // parity with how the legacy code-behind drove batch imports.
+        var prompter = new WinUIImportPrompter(
+            useTemplate: true,
+            editedMetadata: meta,
+            subdir: "\\" + subdirNormalized,
+            statusCallback: msg => DispatcherQueue.TryEnqueue(() => item.StatusText = msg));
 
-        var (hash, size) = await Task.Run(() => CopyAndHash(filePath, installerTarget)).ConfigureAwait(true);
-
-        item.StatusText = "Writing pkginfo…";
-        var installerRel = Path.GetRelativePath(repo.PkgsPath, installerTarget).Replace('\\', '/');
-
-        var pkg = new Package
-        {
-            Name = meta.ID,
-            Version = meta.Version,
-            Description = NullIfEmpty(meta.Description),
-            Developer = NullIfEmpty(meta.Developer),
-            Category = NullIfEmpty(meta.Category),
-            Catalogs = [.. meta.Catalogs],
-            SupportedArchitectures = meta.SupportedArch.Count > 0 ? [.. meta.SupportedArch] : null,
-            UnattendedInstall = meta.UnattendedInstall,
-            UnattendedUninstall = meta.UnattendedUninstall,
-            BlockingApplications = meta.BlockingApps ?? template?.BlockingApplications,
-            InstallerType = NullIfEmpty(meta.InstallerType),
-            Installer = new CimianStudio.Core.Models.Packages.Installer
+        var importService = new ImportService();
+        var success = await Task.Run(() => importService.ImportAsync(
+            packagePath: filePath,
+            config: new ImportConfiguration
             {
-                Type = NullIfEmpty(meta.InstallerType),
-                Location = installerRel,
-                Hash = hash,
-                Size = size > 0 ? size : null,
-                ProductCode = NullIfEmpty(meta.ProductCode),
-                UpgradeCode = NullIfEmpty(meta.UpgradeCode),
-                IdentityName = NullIfEmpty(meta.IdentityName),
+                RepoPath = repo.RootPath,
+                DefaultCatalog = string.IsNullOrEmpty(defaultCatalog) ? "Development" : defaultCatalog,
+                OpenImportedYaml = false,
             },
-            PreinstallScript = template?.PreinstallScript,
-            PostinstallScript = template?.PostinstallScript,
-            PreuninstallScript = template?.PreuninstallScript,
-            PostuninstallScript = template?.PostuninstallScript,
-            InstallCheckScript = template?.InstallCheckScript,
-            UninstallCheckScript = template?.UninstallCheckScript,
-            Requires = template?.Requires is { Count: > 0 } req ? [.. req] : null,
-            UpdateFor = template?.UpdateFor is { Count: > 0 } uf ? [.. uf] : null,
-            MinimumOsVersion = template?.MinimumOsVersion,
-            MaximumOsVersion = template?.MaximumOsVersion,
-            MinimumCimianVersion = template?.MinimumCimianVersion,
-        };
+            scripts: new ScriptPaths(), // Empty -> ImportService falls back to the matched template's scripts.
+            uninstallerPath: null,
+            installsPaths: [],
+            minOSVersion: null,
+            maxOSVersion: null,
+            minCimianVersion: null,
+            extractIcon: false,
+            iconOutputPath: null,
+            noInteractive: true,
+            prompter: prompter)).ConfigureAwait(true);
 
-        await _packageService.CreatePackageAsync(pkg, subdir.Replace('\\', '/')).ConfigureAwait(true);
+        if (!success)
+        {
+            throw new InvalidOperationException("ImportService reported failure.");
+        }
+
+        var (pkginfoAbs, installerAbs) = ComputeImportedPaths(repo, subdirNormalized, meta, filePath);
+        var installerRel = Path.GetRelativePath(repo.PkgsPath, installerAbs).Replace('\\', '/');
 
         item.Status = ImportViewModel.QueueItemStatus.Done;
         item.StatusText = $"Imported → {installerRel}";
 
-        // CreatePackageAsync builds the same pkginfo path PrepareCommitAsync expects.
-        var pkginfoDir = string.IsNullOrEmpty(subdir)
-            ? repo.PkgsInfoPath
-            : Path.Combine(repo.PkgsInfoPath, subdir.Replace('/', Path.DirectorySeparatorChar));
-        var pkginfoAbs = Path.Combine(pkginfoDir, $"{fileBase}.yaml");
-        return [pkginfoAbs, installerTarget];
+        return [pkginfoAbs, installerAbs];
     }
 
     private async Task EnterWizardAsync(string filePath)
@@ -940,10 +919,12 @@ public sealed partial class ImportPage : Page
     }
 
     /// <summary>
-    /// Performs the actual import: SHA-256 hashes the source installer, copies it
-    /// into <c>pkgs/&lt;subdir&gt;/</c>, then writes the pkginfo YAML via the
-    /// existing <see cref="IPackageService.CreatePackageAsync"/>. Surfaces a
-    /// success or failure InfoBar at the bottom of Step 4.
+    /// Hands the wizard's collected state off to upstream
+    /// <see cref="ImportService.ImportAsync"/>. ImportService owns the disk
+    /// I/O — file hash, installer copy, pkginfo serialize+write — so the
+    /// canonical YAML form is the same one cimiimport / makecatalogs /
+    /// manifestutil produce. WinUI just supplies the answers via
+    /// <see cref="WinUIImportPrompter"/> and refreshes the preview after.
     /// </summary>
     private async Task SaveFromStep4Async()
     {
@@ -958,45 +939,82 @@ public sealed partial class ImportPage : Page
 
         ContinueButton.IsEnabled = false;
         BackButton.IsEnabled = false;
+        SaveStatusBar.Severity = InfoBarSeverity.Informational;
+        SaveStatusBar.Title = "Importing...";
+        SaveStatusBar.Message = string.Empty;
+        SaveStatusBar.IsOpen = true;
 
+        var tempScriptPaths = new List<string>();
         try
         {
-            var subdir = (SubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\').Replace('/', Path.DirectorySeparatorChar);
-            var ext = Path.GetExtension(_sourceInstallerPath);
-            var fileBase = $"{_metadataBuffer.ID}-{_metadataBuffer.Version}";
-            var installerTarget = string.IsNullOrEmpty(subdir)
-                ? Path.Combine(repo.PkgsPath, $"{fileBase}{ext}")
-                : Path.Combine(repo.PkgsPath, subdir, $"{fileBase}{ext}");
+            var subdir = (SubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\').Replace('\\', '/');
 
-            Directory.CreateDirectory(Path.GetDirectoryName(installerTarget)!);
+            // Materialize edited script content as temp files so ImportService
+            // can pick them up via its file-path-based ScriptPaths interface.
+            // Empty slots stay null -> ImportService either inherits from the
+            // matched template (when _useTemplate is true) or omits the key.
+            var scriptPaths = await WriteEditedScriptsToTempAsync(tempScriptPaths).ConfigureAwait(true);
 
-            // Stream the file through SHA-256 while copying so we only read it once.
-            // Big installers (>200MB) would block the UI thread on Task.Run otherwise.
-            var (hash, size) = await Task.Run(() => CopyAndHash(_sourceInstallerPath, installerTarget)).ConfigureAwait(true);
+            var prompter = new WinUIImportPrompter(
+                useTemplate: _useTemplate,
+                editedMetadata: _metadataBuffer,
+                subdir: "\\" + subdir,
+                statusCallback: msg => DispatcherQueue.TryEnqueue(() =>
+                {
+                    SaveStatusBar.Title = "Importing...";
+                    SaveStatusBar.Message = msg;
+                }));
 
-            var installerRel = Path.GetRelativePath(repo.PkgsPath, installerTarget).Replace('\\', '/');
-            var pkg = BuildPackageFromWizardState(installerRel, hash, size);
+            var importService = new ImportService();
+            var success = await Task.Run(() => importService.ImportAsync(
+                packagePath: _sourceInstallerPath,
+                config: new ImportConfiguration
+                {
+                    RepoPath = repo.RootPath,
+                    DefaultCatalog = _metadataBuffer.Catalogs.Count > 0 ? _metadataBuffer.Catalogs[0] : "Development",
+                    OpenImportedYaml = false, // WinUI shows the result in-app, no editor spawn.
+                },
+                scripts: scriptPaths,
+                uninstallerPath: null,
+                installsPaths: [],
+                // Template fields the wizard doesn't surface — pass through so the
+                // pkginfo carries them when "Use template" was selected.
+                minOSVersion: _useTemplate ? _templateMatch?.MinimumOsVersion : null,
+                maxOSVersion: _useTemplate ? _templateMatch?.MaximumOsVersion : null,
+                minCimianVersion: _useTemplate ? _templateMatch?.MinimumCimianVersion : null,
+                extractIcon: false,
+                iconOutputPath: null,
+                noInteractive: false,
+                prompter: prompter)).ConfigureAwait(true);
 
-            // Re-render the preview with the real hash/size before persisting.
-            YamlPreviewText.Text = Infrastructure.Yaml.PackageYaml.Serialize(pkg);
+            if (!success)
+            {
+                SaveStatusBar.Severity = InfoBarSeverity.Error;
+                SaveStatusBar.Title = "Save failed";
+                SaveStatusBar.Message = "ImportService reported failure (see status above).";
+                ContinueButton.IsEnabled = true;
+                return;
+            }
 
-            await _packageService.CreatePackageAsync(pkg, subdir.Replace(Path.DirectorySeparatorChar, '/')).ConfigureAwait(true);
+            var (pkginfoAbs, installerAbs) = ComputeImportedPaths(repo, subdir, _metadataBuffer, _sourceInstallerPath);
+            _lastImportedPaths = [pkginfoAbs, installerAbs];
+            _lastImportedSubject = $"Import of {_metadataBuffer.ID} {_metadataBuffer.Version} into repo";
 
-            // Stash the absolute paths so the Git hand-off button can pre-select
-            // these rows on the Git tab. pkginfo path lives under PkgsInfoPath
-            // (CreatePackageAsync builds it the same way).
-            var pkgInfoDir = string.IsNullOrEmpty(subdir)
-                ? repo.PkgsInfoPath
-                : Path.Combine(repo.PkgsInfoPath, subdir);
-            var pkginfoAbs = Path.Combine(pkgInfoDir, $"{fileBase}.yaml");
-            _lastImportedPaths = [pkginfoAbs, installerTarget];
-            _lastImportedSubject = $"Import of {pkg.Name} {pkg.Version} into repo";
+            // Refresh the preview from disk so what the user sees matches what
+            // ImportService actually wrote (catches any minor differences from
+            // the live preview's wizard-state guess).
+            if (File.Exists(pkginfoAbs))
+            {
+                YamlPreviewText.Text = await File.ReadAllTextAsync(pkginfoAbs).ConfigureAwait(true);
+            }
+
+            // ImportService bypassed PackageService so the event needs a manual nudge.
+            _packageService.NotifyPackagesChanged();
 
             SaveStatusBar.Severity = InfoBarSeverity.Success;
             SaveStatusBar.Title = "Import complete";
-            SaveStatusBar.Message = $"Wrote pkginfo and copied installer for {pkg.Name} {pkg.Version}.";
+            SaveStatusBar.Message = $"Wrote pkginfo and copied installer for {_metadataBuffer.ID} {_metadataBuffer.Version}.";
             OpenInGitButton.Visibility = Visibility.Visible;
-            SaveStatusBar.IsOpen = true;
             ContinueButton.IsEnabled = false; // import already happened — no double-save
         }
         catch (Exception ex)
@@ -1004,13 +1022,73 @@ public sealed partial class ImportPage : Page
             SaveStatusBar.Severity = InfoBarSeverity.Error;
             SaveStatusBar.Title = "Save failed";
             SaveStatusBar.Message = ex.Message;
-            SaveStatusBar.IsOpen = true;
             ContinueButton.IsEnabled = true;
         }
         finally
         {
             BackButton.IsEnabled = true;
+            foreach (var tmp in tempScriptPaths)
+            {
+                try { File.Delete(tmp); } catch (IOException) { /* cleanup is best-effort */ }
+            }
         }
+    }
+
+    /// <summary>
+    /// Writes any non-empty <c>_scripts</c> entries to temp files and returns a
+    /// <see cref="ScriptPaths"/> pointing at them. Null entries stay null —
+    /// ImportService treats those as "fall back to template if a name-match
+    /// exists, otherwise omit".
+    /// </summary>
+    private async Task<ScriptPaths> WriteEditedScriptsToTempAsync(List<string> tempPaths)
+    {
+        return new ScriptPaths
+        {
+            Preinstall     = await WriteOneAsync("preinstall").ConfigureAwait(false),
+            Postinstall    = await WriteOneAsync("postinstall").ConfigureAwait(false),
+            Preuninstall   = await WriteOneAsync("preuninstall").ConfigureAwait(false),
+            Postuninstall  = await WriteOneAsync("postuninstall").ConfigureAwait(false),
+            InstallCheck   = await WriteOneAsync("installcheck").ConfigureAwait(false),
+            UninstallCheck = await WriteOneAsync("uninstallcheck").ConfigureAwait(false),
+        };
+
+        async Task<string?> WriteOneAsync(string key)
+        {
+            if (string.IsNullOrEmpty(_scripts[key])) return null;
+            var tmp = Path.Combine(Path.GetTempPath(), $"cs-import-{key}-{Guid.NewGuid():N}.ps1");
+            await File.WriteAllTextAsync(tmp, _scripts[key]).ConfigureAwait(false);
+            tempPaths.Add(tmp);
+            return tmp;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors <c>ImportService.ImportAsync</c>'s output-path derivation
+    /// (sanitized name + arch tag + version + extension under
+    /// <c>pkgs/&lt;subdir&gt;/</c> and <c>pkgsinfo/&lt;subdir&gt;/</c>) so the
+    /// Git hand-off knows which rows to pre-select. If ImportService's filename
+    /// scheme ever drifts, this helper drifts with it — kept in sync via the
+    /// canary tests in CimianStudio.Infrastructure.Tests.Yaml.
+    /// </summary>
+    private static (string PkginfoPath, string InstallerPath) ComputeImportedPaths(
+        CimianStudio.Core.Models.Repository.CimianRepository repo,
+        string subdir,
+        InstallerMetadata metadata,
+        string sourceInstallerPath)
+    {
+        var sanitizedName = MetadataExtractor.SanitizeName(metadata.ID);
+        var archTag = metadata.SupportedArch.Count == 1
+            ? $"-{metadata.SupportedArch[0].ToLowerInvariant()}-"
+            : "-";
+        var ext = Path.GetExtension(sourceInstallerPath);
+        var subdirNormalized = subdir.Replace('/', Path.DirectorySeparatorChar);
+
+        var installerFilename = $"{sanitizedName}{archTag}{metadata.Version}{ext}";
+        var pkginfoFilename = $"{sanitizedName}{archTag}{metadata.Version}.yaml";
+
+        var installerAbs = Path.Combine(repo.PkgsPath, subdirNormalized, installerFilename);
+        var pkginfoAbs = Path.Combine(repo.PkgsInfoPath, subdirNormalized, pkginfoFilename);
+        return (pkginfoAbs, installerAbs);
     }
 
     /// <summary>
@@ -1031,22 +1109,4 @@ public sealed partial class ImportPage : Page
         await gitPage.PrepareCommitAsync(_lastImportedPaths, _lastImportedSubject).ConfigureAwait(true);
     }
 
-    private static (string Hash, long Size) CopyAndHash(string source, string target)
-    {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        using var sourceStream = File.OpenRead(source);
-        using var targetStream = File.Create(target);
-        var buffer = new byte[81920];
-        long total = 0;
-        int read;
-        while ((read = sourceStream.Read(buffer, 0, buffer.Length)) > 0)
-        {
-            targetStream.Write(buffer, 0, read);
-            sha.TransformBlock(buffer, 0, read, null, 0);
-            total += read;
-        }
-        sha.TransformFinalBlock([], 0, 0);
-        var hex = Convert.ToHexString(sha.Hash!).ToLowerInvariant();
-        return (hex, total);
-    }
 }

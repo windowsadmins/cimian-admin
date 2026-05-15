@@ -1,12 +1,10 @@
 namespace CimianStudio.Infrastructure.Services;
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Globalization;
 using CimianStudio.Core.Models.Packages;
 using CimianStudio.Core.Models.Repository;
 using CimianStudio.Core.Services;
-using Cimian.Core.Services;
 using CimianStudio.Infrastructure.Yaml;
 using CimianStudio.Shared;
 
@@ -154,49 +152,15 @@ public sealed class PackageService : IPackageService
         return [.. filtered];
     }
 
-    public async Task<Package> ImportPackageAsync(string installerPath, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Fires <see cref="PackagesChanged"/>. The import wizard hands disk writes
+    /// off to <c>ImportService.ImportAsync</c>, which bypasses
+    /// <see cref="CreatePackageAsync"/> and so wouldn't trigger the event on its
+    /// own — this is how the wizard pokes downstream views to refresh.
+    /// </summary>
+    public void NotifyPackagesChanged()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(installerPath);
-        if (!File.Exists(installerPath))
-        {
-            throw new FileNotFoundException("Installer not found.", installerPath);
-        }
-
-        var repo = RequireRepository();
-
-        var cimiimport = ResolveTool("cimiimport.exe");
-        var psi = new ProcessStartInfo
-        {
-            FileName = cimiimport,
-            WorkingDirectory = repo.RootPath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        psi.ArgumentList.Add("--repo-url");
-        psi.ArgumentList.Add(repo.RootPath);
-        psi.ArgumentList.Add(installerPath);
-
-        using var process = Process.Start(psi)
-            ?? throw new InvalidOperationException($"Failed to start {cimiimport}.");
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-        var stdout = await stdoutTask.ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
-
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"cimiimport exited with code {process.ExitCode}: {stderr}");
-        }
-
-        var package = YamlUtils.DeserializePkgInfo<Package>(stdout)
-            ?? throw new InvalidOperationException("cimiimport produced no parseable pkginfo output.");
-
-        return package;
+        PackagesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private CimianRepository RequireRepository()
@@ -248,16 +212,5 @@ public sealed class PackageService : IPackageService
     {
         return !string.IsNullOrEmpty(haystack)
             && haystack.Contains(needle, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string ResolveTool(string fileName)
-    {
-        // Prefer Cimian's standard install path; fall back to PATH-resolved name.
-        var defaultPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            "Cimian",
-            fileName);
-
-        return File.Exists(defaultPath) ? defaultPath : fileName;
     }
 }

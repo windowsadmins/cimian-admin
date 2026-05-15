@@ -22,6 +22,12 @@
          convention as CimianStudio.csproj's Cimian.Import reference. -->
     <ProjectReference Include="..\..\..\..\packages\CimianTools\shared\core\Cimian.Core.csproj"
                       Private="true" />
+    <!-- Cimian.Import hosts ImportService + IImportPrompter. WinUIImportPrompter
+         (in CimianStudio.Infrastructure.Import) is the GUI-side adapter the
+         interface explicitly anticipates; ImportPage hands collected wizard
+         state through it to ImportService.ImportAsync for the disk write. -->
+    <ProjectReference Include="..\..\..\..\packages\CimianTools\shared\import\Cimian.Import.csproj"
+                      Private="true" />
   </ItemGroup>
 
   <ItemGroup>

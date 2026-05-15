@@ -234,6 +234,7 @@ public sealed partial class ImportPage : Page
 
         var defaultCatalog = (BatchCatalogCombo.SelectedItem as string ?? BatchCatalogCombo.Text ?? string.Empty).Trim();
         var subdir = (BatchSubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\');
+        var useTemplate = BatchUseTemplateCheck.IsChecked == true;
 
         // Reset the batch-handoff tracker — each Process run owns its own set of
         // imported paths so retrying after errors gives a clean handoff list.
@@ -253,7 +254,7 @@ public sealed partial class ImportPage : Page
 
                 try
                 {
-                    var written = await ProcessQueueItemAsync(item, repo, defaultCatalog, subdir).ConfigureAwait(true);
+                    var written = await ProcessQueueItemAsync(item, repo, defaultCatalog, subdir, useTemplate).ConfigureAwait(true);
                     _batchImportedPaths.AddRange(written);
                 }
                 catch (Exception ex)
@@ -311,11 +312,16 @@ public sealed partial class ImportPage : Page
     /// method just wires up the inputs and surfaces per-item status into the
     /// queue list view.
     /// </summary>
+    /// <param name="useTemplate">When true and a name-match exists in
+    /// <c>All.yaml</c>, ImportService inherits scripts / catalogs / blocking
+    /// apps / Requires / OS bounds from it. When false, each pkginfo is built
+    /// fresh from extractor data only.</param>
     private async Task<List<string>> ProcessQueueItemAsync(
         ImportViewModel.QueueItem item,
         CimianStudio.Core.Models.Repository.CimianRepository repo,
         string defaultCatalog,
-        string subdir)
+        string subdir,
+        bool useTemplate)
     {
         var filePath = item.FilePath;
         var subdirNormalized = (subdir ?? string.Empty).Trim().Trim('/', '\\').Replace('\\', '/');
@@ -351,12 +357,19 @@ public sealed partial class ImportPage : Page
             meta.Catalogs = [defaultCatalog];
         }
 
+        // Capture any pre-existing _metadata BEFORE ImportService overwrites
+        // (cimian-promoter / autopkg stamps would otherwise be lost — see
+        // ReadExistingMetadataAsync's docstring).
+        var (pkginfoAbsPre, _) = ComputeImportedPaths(repo, subdirNormalized, meta, filePath);
+        var preservedMetadata = await Infrastructure.Yaml.PackageYaml.ReadExistingMetadataAsync(pkginfoAbsPre).ConfigureAwait(true);
+
         item.StatusText = "Importing…";
 
-        // Batch always inherits from a name-match template if one exists; that's
-        // parity with how the legacy code-behind drove batch imports.
+        // Batch inheritance is now user-controllable via BatchUseTemplateCheck.
+        // Default-on matches the legacy code-behind; off gives each pkginfo a
+        // fresh start from extractor data only.
         var prompter = new WinUIImportPrompter(
-            useTemplate: true,
+            useTemplate: useTemplate,
             editedMetadata: meta,
             subdir: "\\" + subdirNormalized,
             statusCallback: msg => DispatcherQueue.TryEnqueue(() => item.StatusText = msg));
@@ -387,6 +400,11 @@ public sealed partial class ImportPage : Page
         }
 
         var (pkginfoAbs, installerAbs) = ComputeImportedPaths(repo, subdirNormalized, meta, filePath);
+
+        // Restore the captured _metadata block. No-op if there was nothing to
+        // preserve or if ImportService somehow wrote one itself.
+        await Infrastructure.Yaml.PackageYaml.RestoreMetadataIfMissingAsync(pkginfoAbs, preservedMetadata).ConfigureAwait(true);
+
         var installerRel = Path.GetRelativePath(repo.PkgsPath, installerAbs).Replace('\\', '/');
 
         item.Status = ImportViewModel.QueueItemStatus.Done;
@@ -949,6 +967,12 @@ public sealed partial class ImportPage : Page
         {
             var subdir = (SubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\').Replace('\\', '/');
 
+            // Capture any pre-existing _metadata BEFORE ImportService overwrites
+            // the file (its PkgsInfo model has no Metadata field, so the block
+            // would be lost otherwise). cimian-promoter / autopkg stamps go here.
+            var (pkginfoAbsPre, _) = ComputeImportedPaths(repo, subdir, _metadataBuffer, _sourceInstallerPath);
+            var preservedMetadata = await Infrastructure.Yaml.PackageYaml.ReadExistingMetadataAsync(pkginfoAbsPre).ConfigureAwait(true);
+
             // Materialize edited script content as temp files so ImportService
             // can pick them up via its file-path-based ScriptPaths interface.
             // Empty slots stay null -> ImportService either inherits from the
@@ -1000,9 +1024,13 @@ public sealed partial class ImportPage : Page
             _lastImportedPaths = [pkginfoAbs, installerAbs];
             _lastImportedSubject = $"Import of {_metadataBuffer.ID} {_metadataBuffer.Version} into repo";
 
+            // Restore any _metadata block we captured before the overwrite.
+            // No-op if the file already has one (don't double-stamp) or if
+            // there was nothing to preserve in the first place.
+            await Infrastructure.Yaml.PackageYaml.RestoreMetadataIfMissingAsync(pkginfoAbs, preservedMetadata).ConfigureAwait(true);
+
             // Refresh the preview from disk so what the user sees matches what
-            // ImportService actually wrote (catches any minor differences from
-            // the live preview's wizard-state guess).
+            // ImportService actually wrote (plus any restored _metadata block).
             if (File.Exists(pkginfoAbs))
             {
                 YamlPreviewText.Text = await File.ReadAllTextAsync(pkginfoAbs).ConfigureAwait(true);

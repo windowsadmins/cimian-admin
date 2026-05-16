@@ -6,6 +6,8 @@ using CimianStudio.Shared.Settings;
 
 /// <summary>
 /// Reads and writes <see cref="AppSettings"/> as JSON under <c>%LOCALAPPDATA%\CimianStudio\settings.json</c>.
+/// On first launch after the CimianAdmin → CimianStudio rename, an existing legacy
+/// settings file is copied across so recent repositories and other preferences survive.
 /// </summary>
 public sealed class JsonSettingsService : ISettingsService, IDisposable
 {
@@ -109,6 +111,33 @@ public sealed class JsonSettingsService : ISettingsService, IDisposable
     private static string DefaultSettingsPath()
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(localAppData, Constants.AppName, "settings.json");
+        var newPath = Path.Combine(localAppData, Constants.AppName, "settings.json");
+        TryMigrateLegacySettings(localAppData, newPath);
+        return newPath;
+    }
+
+    // One-shot migration from %LOCALAPPDATA%\CimianAdmin\settings.json so users
+    // don't lose recent repositories / last-opened path across the rename. Copies
+    // (rather than moves) so the legacy file remains untouched if the user reverts.
+    // No-ops once the new file exists, so subsequent launches don't repeat the work.
+    private static void TryMigrateLegacySettings(string localAppData, string newPath)
+    {
+        if (File.Exists(newPath)) return;
+        var legacyPath = Path.Combine(localAppData, "CimianAdmin", "settings.json");
+        if (!File.Exists(legacyPath)) return;
+        try
+        {
+            var dir = Path.GetDirectoryName(newPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.Copy(legacyPath, newPath, overwrite: false);
+        }
+        catch (IOException)
+        {
+            // Best-effort: fall back to a fresh settings file rather than failing startup.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Same — proceed with defaults if the legacy file can't be read.
+        }
     }
 }

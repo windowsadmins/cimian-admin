@@ -120,7 +120,9 @@ public sealed class JsonSettingsService : ISettingsService, IDisposable
     // don't lose recent repositories / last-opened path across the rename. Copies
     // (rather than moves) so the legacy file remains untouched if the user reverts.
     // No-ops once the new file exists, so subsequent launches don't repeat the work.
-    private static void TryMigrateLegacySettings(string localAppData, string newPath)
+    // Exposed as `internal` so tests can drive it against a temp-dir layout without
+    // having to stub Environment.SpecialFolder.LocalApplicationData.
+    internal static void TryMigrateLegacySettings(string localAppData, string newPath)
     {
         if (File.Exists(newPath)) return;
         var legacyPath = Path.Combine(localAppData, "CimianAdmin", "settings.json");

@@ -89,4 +89,51 @@ public class JsonSettingsServiceTests : IDisposable
         settings.RecentRepositories[0].Should().Be(@"C:\\repo4");
         settings.RecentRepositories[2].Should().Be(@"C:\\repo2");
     }
+
+    [Fact]
+    public void TryMigrateLegacySettings_WhenLegacyExistsAndNewMissing_CopiesFile()
+    {
+        var legacyDir = Path.Combine(_tempDir, "CimianAdmin");
+        var legacyFile = Path.Combine(legacyDir, "settings.json");
+        var newFile = Path.Combine(_tempDir, "CimianStudio", "settings.json");
+
+        Directory.CreateDirectory(legacyDir);
+        File.WriteAllText(legacyFile, "{\"LastRepositoryPath\":\"C:\\\\legacy\"}");
+
+        JsonSettingsService.TryMigrateLegacySettings(_tempDir, newFile);
+
+        File.Exists(newFile).Should().BeTrue("migration should copy the legacy file to the new path");
+        File.ReadAllText(newFile).Should().Contain("C:\\\\legacy");
+        File.Exists(legacyFile).Should().BeTrue("migration copies, doesn't move — legacy file stays put");
+    }
+
+    [Fact]
+    public void TryMigrateLegacySettings_WhenNewExists_DoesNotOverwrite()
+    {
+        var legacyDir = Path.Combine(_tempDir, "CimianAdmin");
+        var legacyFile = Path.Combine(legacyDir, "settings.json");
+        var newDir = Path.Combine(_tempDir, "CimianStudio");
+        var newFile = Path.Combine(newDir, "settings.json");
+
+        Directory.CreateDirectory(legacyDir);
+        Directory.CreateDirectory(newDir);
+        File.WriteAllText(legacyFile, "{\"LastRepositoryPath\":\"C:\\\\legacy\"}");
+        File.WriteAllText(newFile, "{\"LastRepositoryPath\":\"C:\\\\new\"}");
+
+        JsonSettingsService.TryMigrateLegacySettings(_tempDir, newFile);
+
+        File.ReadAllText(newFile).Should().Contain("C:\\\\new",
+            "an existing CimianStudio settings file must never be overwritten by the legacy copy");
+    }
+
+    [Fact]
+    public void TryMigrateLegacySettings_WhenNoLegacyFile_NoOps()
+    {
+        var newFile = Path.Combine(_tempDir, "CimianStudio", "settings.json");
+
+        // Should not throw and should not create anything.
+        JsonSettingsService.TryMigrateLegacySettings(_tempDir, newFile);
+
+        File.Exists(newFile).Should().BeFalse();
+    }
 }

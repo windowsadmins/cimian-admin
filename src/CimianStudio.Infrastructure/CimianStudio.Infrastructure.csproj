@@ -17,4 +17,8 @@
     <ProjectReference Include="..\CimianStudio.Core\CimianStudio.Core.csproj" />
     <ProjectReference Include="..\CimianStudio.Shared\CimianStudio.Shared.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CimianStudio.Infrastructure.Tests" />
+  </ItemGroup>
 </Project>

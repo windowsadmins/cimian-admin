@@ -402,6 +402,99 @@
                     </Border>
                 </Grid>
             </PivotItem>
+
+            <PivotItem Header="Hooks" Margin="0,16,0,0">
+                <!-- Two-pane: canonical hook list on the left, selected hook content on the right. -->
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="280" MinWidth="200" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="300" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TextBlock x:Name="HooksDirCaption"
+                                       Grid.Row="0"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Padding="8,6,8,2" />
+                            <ListView x:Name="HooksList"
+                                      Grid.Row="1"
+                                      SelectionMode="Single"
+                                      SelectionChanged="OnHookSelectionChanged"
+                                      Padding="0,4,0,4">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Padding="6,6,6,6" ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Name}"
+                                                       FontFamily="Cascadia Mono, Consolas"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding StateDisplay}"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <TextBlock x:Name="HooksEmpty"
+                                       Grid.Row="1"
+                                       Text="No git repository open."
+                                       Visibility="Collapsed"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                            <ProgressRing x:Name="HooksLoading"
+                                          Grid.Row="1"
+                                          IsActive="False"
+                                          Width="32"
+                                          Height="32" />
+                        </Grid>
+                    </Border>
+
+                    <controls:GridSplitter Grid.Column="1"
+                                           Width="6"
+                                           Background="Transparent"
+                                           ResizeBehavior="PreviousAndNext"
+                                           ResizeDirection="Columns" />
+
+                    <Border Grid.Column="2"
+                            Style="{StaticResource CardStyle}" Shadow="{StaticResource CardShadow}" Translation="0,0,16">
+                        <Grid>
+                            <ScrollViewer x:Name="HookContentScroller"
+                                          HorizontalScrollMode="Enabled"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto"
+                                          Padding="10"
+                                          Visibility="Collapsed">
+                                <TextBlock x:Name="HookContentText"
+                                           FontFamily="Cascadia Mono, Consolas"
+                                           FontSize="12"
+                                           TextWrapping="NoWrap"
+                                           IsTextSelectionEnabled="True" />
+                            </ScrollViewer>
+                            <TextBlock x:Name="HookContentPlaceholder"
+                                       Text="Select a hook to view its content."
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </PivotItem>
         </Pivot>
 
         <Grid Grid.Row="2">

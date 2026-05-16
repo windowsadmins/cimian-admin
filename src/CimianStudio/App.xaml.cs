@@ -36,6 +36,7 @@ public partial class App : Application
             {
                 services.AddSingleton<ISettingsService, JsonSettingsService>();
                 services.AddSingleton<IRepositoryService, RepositoryService>();
+                services.AddSingleton<IGitHooksService, GitHooksService>();
                 services.AddSingleton<IPackageService, PackageService>();
                 services.AddSingleton<IManifestService, ManifestService>();
                 services.AddSingleton<ICatalogService, CatalogService>();

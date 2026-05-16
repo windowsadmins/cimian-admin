@@ -24,6 +24,7 @@ public sealed partial class GitPage : Page
     private readonly IGitService _gitService;
     private readonly IPackageService _packageService;
     private readonly IManifestService _manifestService;
+    private readonly IGitHooksService _gitHooksService;
 
     private GitRepositoryInfo? _info;
     private List<ChangeRow> _rows = [];
@@ -42,16 +43,19 @@ public sealed partial class GitPage : Page
         IRepositoryService repositoryService,
         IGitService gitService,
         IPackageService packageService,
-        IManifestService manifestService)
+        IManifestService manifestService,
+        IGitHooksService gitHooksService)
     {
         ArgumentNullException.ThrowIfNull(repositoryService);
         ArgumentNullException.ThrowIfNull(gitService);
         ArgumentNullException.ThrowIfNull(packageService);
         ArgumentNullException.ThrowIfNull(manifestService);
+        ArgumentNullException.ThrowIfNull(gitHooksService);
         _repositoryService = repositoryService;
         _gitService = gitService;
         _packageService = packageService;
         _manifestService = manifestService;
+        _gitHooksService = gitHooksService;
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -559,19 +563,29 @@ public sealed partial class GitPage : Page
     {
         await RefreshAsync().ConfigureAwait(true);
         _historyLoaded = false;
+        _hooksLoaded = false;
         if (BodyPivot.SelectedIndex == 1)
         {
             await LoadHistoryAsync().ConfigureAwait(true);
         }
+        else if (BodyPivot.SelectedIndex == 2)
+        {
+            await LoadHooksAsync().ConfigureAwait(true);
+        }
     }
 
     private bool _historyLoaded;
+    private bool _hooksLoaded;
 
     private async void OnPivotSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (BodyPivot.SelectedIndex == 1 && !_historyLoaded)
         {
             await LoadHistoryAsync().ConfigureAwait(true);
+        }
+        else if (BodyPivot.SelectedIndex == 2 && !_hooksLoaded)
+        {
+            await LoadHooksAsync().ConfigureAwait(true);
         }
     }
 
@@ -599,6 +613,84 @@ public sealed partial class GitPage : Page
             HistoryLoading.IsActive = false;
         }
     }
+
+    // ── Hooks pivot ───────────────────────────────────────────────────────────
+
+    private async Task LoadHooksAsync()
+    {
+        HooksList.ItemsSource = null;
+        HookContentScroller.Visibility = Visibility.Collapsed;
+        HookContentPlaceholder.Text = "Select a hook to view its content.";
+        HookContentPlaceholder.Visibility = Visibility.Visible;
+
+        if (_info is null)
+        {
+            HooksEmpty.Visibility = Visibility.Visible;
+            return;
+        }
+
+        HooksEmpty.Visibility = Visibility.Collapsed;
+        HooksLoading.IsActive = true;
+        try
+        {
+            var hooksDir = await _gitHooksService.DiscoverHooksDirAsync(_info.GitRoot).ConfigureAwait(true);
+            HooksDirCaption.Text = hooksDir;
+            var hooks = await _gitHooksService.GetHooksAsync(hooksDir).ConfigureAwait(true);
+            HooksList.ItemsSource = hooks.Select(h => new HookRow(h, hooksDir)).ToList();
+            _hooksLoaded = true;
+        }
+        finally
+        {
+            HooksLoading.IsActive = false;
+        }
+    }
+
+    private void OnHookSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListView lv || lv.SelectedItem is not HookRow row)
+        {
+            HookContentScroller.Visibility = Visibility.Collapsed;
+            HookContentPlaceholder.Text = "Select a hook to view its content.";
+            HookContentPlaceholder.Visibility = Visibility.Visible;
+            return;
+        }
+
+        if (row.Hook.Content is { Length: > 0 } content)
+        {
+            HookContentText.Text = content;
+            HookContentScroller.Visibility = Visibility.Visible;
+            HookContentPlaceholder.Visibility = Visibility.Collapsed;
+        }
+        else if (row.Hook.State == Core.Models.Git.GitHookState.Missing)
+        {
+            HookContentScroller.Visibility = Visibility.Collapsed;
+            HookContentPlaceholder.Text = "Hook not installed.";
+            HookContentPlaceholder.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            HookContentScroller.Visibility = Visibility.Collapsed;
+            HookContentPlaceholder.Text = "Hook file is empty.";
+            HookContentPlaceholder.Visibility = Visibility.Visible;
+        }
+    }
+
+    private sealed class HookRow(Core.Models.Git.GitHook hook, string hooksDir)
+    {
+        public Core.Models.Git.GitHook Hook { get; } = hook;
+        public string Name => Hook.Name;
+        public string HooksDir { get; } = hooksDir;
+
+        public string StateDisplay => Hook.State switch
+        {
+            Core.Models.Git.GitHookState.Active => "Active",
+            Core.Models.Git.GitHookState.SampleOnly => "Sample only",
+            Core.Models.Git.GitHookState.Disabled => "Disabled",
+            _ => "Missing",
+        };
+    }
+
+    // ── History pivot ──────────────────────────────────────────────────────────
 
     private async void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -681,10 +773,15 @@ public sealed partial class GitPage : Page
         {
             HideProgress();
             _historyLoaded = false;
+            _hooksLoaded = false;
             await RefreshAsync().ConfigureAwait(true);
             if (BodyPivot.SelectedIndex == 1)
             {
                 await LoadHistoryAsync().ConfigureAwait(true);
+            }
+            else if (BodyPivot.SelectedIndex == 2)
+            {
+                await LoadHooksAsync().ConfigureAwait(true);
             }
         }
     }
@@ -1041,9 +1138,14 @@ public sealed partial class GitPage : Page
     {
         await RefreshAsync().ConfigureAwait(true);
         _historyLoaded = false;
+        _hooksLoaded = false;
         if (BodyPivot.SelectedIndex == 1)
         {
             await LoadHistoryAsync().ConfigureAwait(true);
+        }
+        else if (BodyPivot.SelectedIndex == 2)
+        {
+            await LoadHooksAsync().ConfigureAwait(true);
         }
         if (App.MainWindowInstance is { } window)
         {

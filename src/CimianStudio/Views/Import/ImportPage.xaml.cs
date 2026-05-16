@@ -357,12 +357,6 @@ public sealed partial class ImportPage : Page
             meta.Catalogs = [defaultCatalog];
         }
 
-        // Capture any pre-existing _metadata BEFORE ImportService overwrites
-        // (cimian-promoter / autopkg stamps would otherwise be lost — see
-        // ReadExistingMetadataAsync's docstring).
-        var (pkginfoAbsPre, _) = ComputeImportedPaths(repo, subdirNormalized, meta, filePath);
-        var preservedMetadata = await Infrastructure.Yaml.PackageYaml.ReadExistingMetadataAsync(pkginfoAbsPre).ConfigureAwait(true);
-
         item.StatusText = "Importing…";
 
         // Batch inheritance is now user-controllable via BatchUseTemplateCheck.
@@ -400,10 +394,6 @@ public sealed partial class ImportPage : Page
         }
 
         var (pkginfoAbs, installerAbs) = ComputeImportedPaths(repo, subdirNormalized, meta, filePath);
-
-        // Restore the captured _metadata block. No-op if there was nothing to
-        // preserve or if ImportService somehow wrote one itself.
-        await Infrastructure.Yaml.PackageYaml.RestoreMetadataIfMissingAsync(pkginfoAbs, preservedMetadata).ConfigureAwait(true);
 
         var installerRel = Path.GetRelativePath(repo.PkgsPath, installerAbs).Replace('\\', '/');
 
@@ -967,12 +957,6 @@ public sealed partial class ImportPage : Page
         {
             var subdir = (SubdirBox.Text ?? string.Empty).Trim().Trim('/', '\\').Replace('\\', '/');
 
-            // Capture any pre-existing _metadata BEFORE ImportService overwrites
-            // the file (its PkgsInfo model has no Metadata field, so the block
-            // would be lost otherwise). cimian-promoter / autopkg stamps go here.
-            var (pkginfoAbsPre, _) = ComputeImportedPaths(repo, subdir, _metadataBuffer, _sourceInstallerPath);
-            var preservedMetadata = await Infrastructure.Yaml.PackageYaml.ReadExistingMetadataAsync(pkginfoAbsPre).ConfigureAwait(true);
-
             // Materialize edited script content as temp files so ImportService
             // can pick them up via its file-path-based ScriptPaths interface.
             // Empty slots stay null -> ImportService either inherits from the
@@ -1023,11 +1007,6 @@ public sealed partial class ImportPage : Page
             var (pkginfoAbs, installerAbs) = ComputeImportedPaths(repo, subdir, _metadataBuffer, _sourceInstallerPath);
             _lastImportedPaths = [pkginfoAbs, installerAbs];
             _lastImportedSubject = $"Import of {_metadataBuffer.ID} {_metadataBuffer.Version} into repo";
-
-            // Restore any _metadata block we captured before the overwrite.
-            // No-op if the file already has one (don't double-stamp) or if
-            // there was nothing to preserve in the first place.
-            await Infrastructure.Yaml.PackageYaml.RestoreMetadataIfMissingAsync(pkginfoAbs, preservedMetadata).ConfigureAwait(true);
 
             // Refresh the preview from disk so what the user sees matches what
             // ImportService actually wrote (plus any restored _metadata block).

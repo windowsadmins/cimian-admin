@@ -14,4 +14,10 @@ public sealed class AppSettings
     public double WindowWidth { get; set; } = 1400;
 
     public double WindowHeight { get; set; } = 900;
+
+    /// <summary>
+    /// Per-feature settings blobs, keyed by section id, stored as JSON strings.
+    /// Managed by <see cref="ISettingsService.GetSection{T}"/> / <see cref="ISettingsService.SetSectionAsync{T}"/>.
+    /// </summary>
+    public Dictionary<string, string> Sections { get; set; } = [];
 }

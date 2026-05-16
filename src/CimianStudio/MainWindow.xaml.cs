@@ -444,6 +444,7 @@ public sealed partial class MainWindow : Window
             "manifests" => NavManifests,
             "catalogs" => NavCatalogs,
             "git" => NavGit,
+            "settings" => NavSettings,
             _ => null,
         };
     }
@@ -459,6 +460,7 @@ public sealed partial class MainWindow : Window
             "catalogs" => App.Resolve<CatalogsPage>(),
             "import" => App.Resolve<Views.Import.ImportPage>(),
             "git" => App.Resolve<GitPage>(),
+            "settings" => App.Resolve<Views.Settings.SettingsPage>(),
             _ => null,
         };
     }

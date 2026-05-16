@@ -3,6 +3,7 @@ namespace CimianStudio;
 using CimianStudio.Core.Services;
 using CimianStudio.Infrastructure.Services;
 using CimianStudio.Infrastructure.Settings;
+using CimianStudio.Settings;
 using CimianStudio.Shared.Settings;
 using CimianStudio.ViewModels;
 using CimianStudio.Views;
@@ -62,9 +63,15 @@ public partial class App : Application
                 // a brief tab switch.
                 services.AddSingleton<GitPage>();
                 services.AddSingleton<Views.Import.ImportPage>();
+                // SettingsPage is a singleton so card state survives tab switches.
+                services.AddSingleton<Views.Settings.SettingsPage>();
 
                 services.AddTransient<PackageEditorWindow>();
                 services.AddTransient<ManifestEditorWindow>();
+
+                // Settings section providers — each feature contributes one.
+                // ISettingsSectionProvider registrations must precede SettingsPage resolution.
+                services.AddSingleton<ISettingsSectionProvider, AboutSectionProvider>();
             })
             .Build();
     }

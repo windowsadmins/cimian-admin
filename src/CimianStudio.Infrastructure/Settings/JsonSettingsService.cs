@@ -18,6 +18,7 @@ public sealed class JsonSettingsService : ISettingsService, IDisposable
 
     private readonly string _settingsPath;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private volatile AppSettings? _cache;
 
     public JsonSettingsService()
         : this(DefaultSettingsPath())
@@ -34,26 +35,35 @@ public sealed class JsonSettingsService : ISettingsService, IDisposable
     }
 
     public string SettingsPath => _settingsPath;
+    public string SettingsFilePath => _settingsPath;
 
     public async Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            AppSettings result;
             if (!File.Exists(_settingsPath))
             {
-                return new AppSettings();
+                result = new AppSettings();
+            }
+            else
+            {
+                try
+                {
+                    using var stream = File.OpenRead(_settingsPath);
+                    result = await JsonSerializer
+                        .DeserializeAsync<AppSettings>(stream, SerializerOptions, cancellationToken)
+                        .ConfigureAwait(false) ?? new AppSettings();
+                }
+                catch (JsonException)
+                {
+                    result = new AppSettings();
+                }
             }
 
-            using var stream = File.OpenRead(_settingsPath);
-            var settings = await JsonSerializer
-                .DeserializeAsync<AppSettings>(stream, SerializerOptions, cancellationToken)
-                .ConfigureAwait(false);
-            return settings ?? new AppSettings();
-        }
-        catch (JsonException)
-        {
-            return new AppSettings();
+            _cache = result;
+            return result;
         }
         finally
         {
@@ -78,6 +88,8 @@ public sealed class JsonSettingsService : ISettingsService, IDisposable
             await JsonSerializer
                 .SerializeAsync(stream, settings, SerializerOptions, cancellationToken)
                 .ConfigureAwait(false);
+
+            _cache = settings;
         }
         finally
         {
@@ -107,6 +119,35 @@ public sealed class JsonSettingsService : ISettingsService, IDisposable
 
         await SaveAsync(settings, cancellationToken).ConfigureAwait(false);
     }
+
+    public T GetSection<T>(string sectionId) where T : class, new()
+    {
+        var sections = _cache?.Sections;
+        if (sections is not null && sections.TryGetValue(sectionId, out var json))
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<T>(json) ?? new T();
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return new T();
+    }
+
+    public async Task SetSectionAsync<T>(string sectionId, T value, CancellationToken cancellationToken = default) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var settings = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        settings.Sections[sectionId] = JsonSerializer.Serialize(value, SerializerOptions);
+        await SaveAsync(settings, cancellationToken).ConfigureAwait(false);
+        SectionChanged?.Invoke(this, sectionId);
+    }
+
+    public event EventHandler<string>? SectionChanged;
 
     private static string DefaultSettingsPath()
     {

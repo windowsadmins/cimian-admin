@@ -20,10 +20,10 @@ public class PackageEmitterTests
                       cimian-promoter_edit_date: '2026-04-29T18:01:30Z'
                     """;
 
-        var pkg = PackageYamlSerializer.Deserialize(input);
+        var pkg = PackageYaml.Deserialize(input);
 
         pkg.Should().NotBeNull();
-        pkg!.Metadata.Should().NotBeNull("PackageYamlSerializer.Deserialize patches in _metadata");
+        pkg!.Metadata.Should().NotBeNull("PackageYaml.Deserialize patches in _metadata via YamlUtils.ExtractMetadataBlock");
         pkg.Metadata!.Should().ContainKey("cimian-promoter_edit_date");
     }
 
@@ -41,8 +41,8 @@ public class PackageEmitterTests
                       cimian-promoter_edit_date: '2026-04-29T18:01:30Z'
                     """;
 
-        var pkg = PackageYamlSerializer.Deserialize(input);
-        var emitted = PackageYamlSerializer.Serialize(pkg!);
+        var pkg = PackageYaml.Deserialize(input);
+        var emitted = PackageYaml.Serialize(pkg!);
 
         emitted.Should().Contain("_metadata:");
         emitted.Should().Contain("cimian-promoter_edit_date");
@@ -61,7 +61,7 @@ public class PackageEmitterTests
             Metadata = new Dictionary<string, object?> { ["cimian-promoter_edit_date"] = "2026-04-29T18:01:30Z" },
         };
 
-        var yaml = PackageYamlSerializer.Serialize(pkg);
+        var yaml = PackageYaml.Serialize(pkg);
 
         // Name comes first, then display_name, then version. _metadata is last.
         var nameIdx = yaml.IndexOf("name:", StringComparison.Ordinal);
@@ -86,7 +86,7 @@ public class PackageEmitterTests
             InstallCheckScript = "if (Test-Path X) { exit 1 }\nelse { exit 0 }",
         };
 
-        var yaml = PackageYamlSerializer.Serialize(pkg);
+        var yaml = PackageYaml.Serialize(pkg);
 
         // | is clip (single trailing newline). |- is strip (no trailing newline).
         // For PowerShell scripts we want | to match Cimian's convention.
@@ -114,7 +114,7 @@ public class PackageEmitterTests
             },
         };
 
-        var yaml = PackageYamlSerializer.Serialize(pkg);
+        var yaml = PackageYaml.Serialize(pkg);
 
         var typeIdx = yaml.IndexOf("type:", StringComparison.Ordinal);
         var sizeIdx = yaml.IndexOf("size:", StringComparison.Ordinal);

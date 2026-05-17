@@ -22,13 +22,13 @@ public sealed class PackageMetadataRoundTripTests
               cimian-promoter_edit_date: '2026-04-29T18:01:30Z'
             """;
 
-        var package = PackageYamlSerializer.Deserialize(yaml);
+        var package = PackageYaml.Deserialize(yaml);
         package.Should().NotBeNull();
         package!.Metadata.Should().NotBeNull("_metadata block should be parsed via the representation model");
         package.Metadata!.Should().ContainKey("cimian-promoter_edit_date");
         package.Metadata!["cimian-promoter_edit_date"].Should().Be("2026-04-29T18:01:30Z");
 
-        var rendered = PackageYamlSerializer.Serialize(package);
+        var rendered = PackageYaml.Serialize(package);
         rendered.Should().Contain("_metadata:", "the trailing block must round-trip");
         rendered.Should().Contain("cimian-promoter_edit_date", "the metadata key must survive serialization");
         rendered.Should().Contain("2026-04-29T18:01:30Z", "the metadata value must survive serialization");

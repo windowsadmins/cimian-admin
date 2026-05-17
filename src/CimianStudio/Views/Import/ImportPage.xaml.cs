@@ -883,7 +883,7 @@ public sealed partial class ImportPage : Page
         // copies the file, so we placeholder it. Same for size — both are stamped on
         // write.
         var pkg = BuildPackageFromWizardState(installerRel, hash: "<computed on save>", size: 0);
-        YamlPreviewText.Text = Infrastructure.Yaml.PackageYamlSerializer.Serialize(pkg);
+        YamlPreviewText.Text = Infrastructure.Yaml.PackageYaml.Serialize(pkg);
     }
 
     /// <summary>
@@ -978,7 +978,7 @@ public sealed partial class ImportPage : Page
             var pkg = BuildPackageFromWizardState(installerRel, hash, size);
 
             // Re-render the preview with the real hash/size before persisting.
-            YamlPreviewText.Text = Infrastructure.Yaml.PackageYamlSerializer.Serialize(pkg);
+            YamlPreviewText.Text = Infrastructure.Yaml.PackageYaml.Serialize(pkg);
 
             await _packageService.CreatePackageAsync(pkg, subdir.Replace(Path.DirectorySeparatorChar, '/')).ConfigureAwait(true);
 

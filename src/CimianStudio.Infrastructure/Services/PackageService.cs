@@ -6,6 +6,7 @@ using System.Globalization;
 using CimianStudio.Core.Models.Packages;
 using CimianStudio.Core.Models.Repository;
 using CimianStudio.Core.Services;
+using Cimian.Core.Services;
 using CimianStudio.Infrastructure.Yaml;
 using CimianStudio.Shared;
 
@@ -192,7 +193,7 @@ public sealed class PackageService : IPackageService
             throw new InvalidOperationException($"cimiimport exited with code {process.ExitCode}: {stderr}");
         }
 
-        var package = YamlSerialization.Deserializer.Deserialize<Package>(stdout)
+        var package = YamlUtils.DeserializePkgInfo<Package>(stdout)
             ?? throw new InvalidOperationException("cimiimport produced no parseable pkginfo output.");
 
         return package;
@@ -209,7 +210,7 @@ public sealed class PackageService : IPackageService
         try
         {
             var text = await File.ReadAllTextAsync(filePath, cancellationToken).ConfigureAwait(false);
-            var package = PackageYamlSerializer.Deserialize(text);
+            var package = PackageYaml.Deserialize(text);
             if (package is null)
             {
                 return null;
@@ -234,7 +235,7 @@ public sealed class PackageService : IPackageService
             Directory.CreateDirectory(directory);
         }
 
-        var yaml = PackageYamlSerializer.Serialize(package);
+        var yaml = PackageYaml.Serialize(package);
         await File.WriteAllTextAsync(filePath, yaml, cancellationToken).ConfigureAwait(false);
         package.FilePath = filePath;
         package.LastModified = File.GetLastWriteTimeUtc(filePath);

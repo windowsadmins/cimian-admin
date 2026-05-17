@@ -72,6 +72,7 @@ public partial class App : Application
 
                 // Settings section providers — each feature contributes one.
                 // ISettingsSectionProvider registrations must precede SettingsPage resolution.
+                services.AddSingleton<ISettingsSectionProvider, HooksSectionProvider>();
                 services.AddSingleton<ISettingsSectionProvider, AboutSectionProvider>();
             })
             .Build();

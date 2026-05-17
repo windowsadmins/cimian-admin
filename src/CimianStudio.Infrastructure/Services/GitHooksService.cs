@@ -1,145 +1,256 @@
 namespace CimianStudio.Infrastructure.Services;
 
+using System.Diagnostics;
 using System.Text;
 using CimianStudio.Core.Models.Git;
 using CimianStudio.Core.Services;
 
 public sealed class GitHooksService : IGitHooksService
 {
-    private static readonly string[] CanonicalHooks =
-    [
-        "pre-commit",
-        "prepare-commit-msg",
-        "commit-msg",
-        "pre-push",
-        "post-commit",
-    ];
+    // Single source of truth for the "all standard hooks" list lives in
+    // GitHookCatalog (Core layer). Local array copy lets us use Array.IndexOf
+    // for the canonical-order tie-break in sort without per-call allocation.
+    private static readonly string[] CanonicalHooks = [.. GitHookCatalog.AllNames];
 
-    public Task<string> DiscoverHooksDirAsync(string gitRoot, CancellationToken cancellationToken = default)
+    public Task<HooksDirInfo> DiscoverHooksDirAsync(
+        string gitRoot,
+        string? overridePath = null,
+        CancellationToken cancellationToken = default)
     {
-        // 1. core.hooksPath in .git/config
-        var configured = ReadCoreHooksPath(gitRoot);
-        if (configured is not null)
+        // 1. Explicit settings override.
+        if (!string.IsNullOrWhiteSpace(overridePath))
         {
-            var resolved = Path.IsPathRooted(configured)
-                ? configured
-                : Path.GetFullPath(Path.Combine(gitRoot, configured));
-            return Task.FromResult(resolved);
+            var resolved = Path.IsPathRooted(overridePath)
+                ? overridePath
+                : Path.GetFullPath(Path.Combine(gitRoot, overridePath));
+            return Task.FromResult(new HooksDirInfo(resolved, HooksDirSource.SettingsOverride));
         }
 
-        // 2. .githooks/ at repo root (version-controlled convention)
+        // 2. core.hooksPath from git config (handles includes that direct .git/config parse misses).
+        var fromConfig = ReadCoreHooksPathViaGit(gitRoot);
+        if (fromConfig is not null)
+        {
+            var resolved = Path.IsPathRooted(fromConfig)
+                ? fromConfig
+                : Path.GetFullPath(Path.Combine(gitRoot, fromConfig));
+            return Task.FromResult(new HooksDirInfo(resolved, HooksDirSource.GitConfigHooksPath));
+        }
+
+        // 3. Version-controlled .githooks/ at repo root.
         var versioned = Path.Combine(gitRoot, ".githooks");
         if (Directory.Exists(versioned))
-            return Task.FromResult(versioned);
+            return Task.FromResult(new HooksDirInfo(versioned, HooksDirSource.VersionControlled));
 
-        // 3. Default .git/hooks/
-        return Task.FromResult(Path.Combine(gitRoot, ".git", "hooks"));
+        // 4. Default via git rev-parse --git-path hooks.
+        var defaultPath = ResolveDefaultHooksPath(gitRoot);
+        return Task.FromResult(new HooksDirInfo(defaultPath, HooksDirSource.Default));
     }
 
-    public async Task<IReadOnlyList<GitHook>> GetHooksAsync(string hooksDir, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<GitHook>> GetHooksAsync(
+        string hooksDir,
+        CancellationToken cancellationToken = default)
     {
-        var hooks = new List<GitHook>(CanonicalHooks.Length);
+        var foundNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hooks = new List<GitHook>();
 
+        if (Directory.Exists(hooksDir))
+        {
+            foreach (var filePath in Directory.EnumerateFiles(hooksDir))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var fileName = Path.GetFileName(filePath);
+
+                // Skip .sample files that shadow a canonical hook — we'll
+                // add them under the canonical hook classification below.
+                GitHookState state;
+                string baseName;
+                if (fileName.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase))
+                {
+                    baseName = fileName[..^".disabled".Length];
+                    state = GitHookState.Disabled;
+                }
+                else if (fileName.EndsWith(".sample", StringComparison.OrdinalIgnoreCase))
+                {
+                    baseName = fileName[..^".sample".Length];
+                    state = GitHookState.SampleOnly;
+                }
+                else
+                {
+                    baseName = fileName;
+                    state = GitHookState.Active;
+                }
+
+                // Prefer Active over Disabled over SampleOnly when multiple variants exist.
+                if (foundNames.Contains(baseName))
+                {
+                    var existing = hooks.FindIndex(h => string.Equals(h.Name, baseName, StringComparison.OrdinalIgnoreCase));
+                    if (existing >= 0 && state < hooks[existing].State)
+                        continue; // keep higher-priority state
+                }
+
+                foundNames.Add(baseName);
+                var content = await ReadUtf8Async(filePath, cancellationToken).ConfigureAwait(false);
+                var hook = new GitHook
+                {
+                    Name = baseName,
+                    AbsolutePath = filePath,
+                    State = state,
+                    Language = DetectLanguage(content),
+                    Content = content,
+                };
+                var idx = hooks.FindIndex(h => string.Equals(h.Name, baseName, StringComparison.OrdinalIgnoreCase));
+                if (idx >= 0) hooks[idx] = hook;
+                else hooks.Add(hook);
+            }
+        }
+
+        // Ensure all canonical hooks appear (as Inactive if not present on disk).
         foreach (var name in CanonicalHooks)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            hooks.Add(await ClassifyHookAsync(hooksDir, name, cancellationToken).ConfigureAwait(false));
+            if (!foundNames.Contains(name))
+            {
+                hooks.Add(new GitHook
+                {
+                    Name = name,
+                    AbsolutePath = Path.Combine(hooksDir, name),
+                    State = GitHookState.Inactive,
+                    Language = GitHookLanguage.Unknown,
+                    Content = null,
+                });
+            }
         }
+
+        // Sort: Active first (then Disabled, SampleOnly, Inactive), tie-break by
+        // canonical order, then alphabetical. The enum is Inactive=0 .. Active=3,
+        // so descending on state value floats Active to the top.
+        hooks.Sort((a, b) =>
+        {
+            var stateCmp = b.State.CompareTo(a.State);
+            if (stateCmp != 0) return stateCmp;
+            var ai = Array.IndexOf(CanonicalHooks, a.Name);
+            var bi = Array.IndexOf(CanonicalHooks, b.Name);
+            if (ai >= 0 && bi >= 0) return ai.CompareTo(bi);
+            if (ai >= 0) return -1;
+            if (bi >= 0) return 1;
+            return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+        });
 
         return hooks;
     }
 
-    private static async Task<GitHook> ClassifyHookAsync(string hooksDir, string name, CancellationToken ct)
+    public async Task SaveHookAsync(
+        string absolutePath,
+        string content,
+        CancellationToken cancellationToken = default)
     {
-        var activePath = Path.Combine(hooksDir, name);
-        var disabledPath = activePath + ".disabled";
-        var samplePath = activePath + ".sample";
+        ArgumentNullException.ThrowIfNull(absolutePath);
+        ArgumentNullException.ThrowIfNull(content);
 
-        if (File.Exists(activePath))
-        {
-            var content = await ReadUtf8Async(activePath, ct).ConfigureAwait(false);
-            return new GitHook
-            {
-                Name = name,
-                AbsolutePath = activePath,
-                State = GitHookState.Active,
-                Language = DetectLanguage(content),
-                Content = content,
-            };
-        }
+        var dir = Path.GetDirectoryName(absolutePath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            Directory.CreateDirectory(dir);
 
-        if (File.Exists(disabledPath))
-        {
-            var content = await ReadUtf8Async(disabledPath, ct).ConfigureAwait(false);
-            return new GitHook
-            {
-                Name = name,
-                AbsolutePath = disabledPath,
-                State = GitHookState.Disabled,
-                Language = DetectLanguage(content),
-                Content = content,
-            };
-        }
-
-        if (File.Exists(samplePath))
-        {
-            var content = await ReadUtf8Async(samplePath, ct).ConfigureAwait(false);
-            return new GitHook
-            {
-                Name = name,
-                AbsolutePath = samplePath,
-                State = GitHookState.SampleOnly,
-                Language = DetectLanguage(content),
-                Content = content,
-            };
-        }
-
-        return new GitHook
-        {
-            Name = name,
-            AbsolutePath = activePath,
-            State = GitHookState.Missing,
-            Language = GitHookLanguage.Unknown,
-            Content = null,
-        };
+        // Normalize to LF line endings.
+        var normalized = content.Replace("\r\n", "\n", StringComparison.Ordinal)
+                                .Replace('\r', '\n');
+        await File.WriteAllTextAsync(absolutePath, normalized, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken)
+                  .ConfigureAwait(false);
     }
 
-    // Reads [core] hooksPath from .git/config without shelling out to git.
-    // Returns null if not set. The ini-style format is simple enough to parse directly.
-    private static string? ReadCoreHooksPath(string gitRoot)
+    public Task SetHookActiveAsync(
+        string absolutePath,
+        bool active,
+        CancellationToken cancellationToken = default)
     {
-        var configPath = Path.Combine(gitRoot, ".git", "config");
-        if (!File.Exists(configPath)) return null;
+        ArgumentNullException.ThrowIfNull(absolutePath);
+        // Derive the base name regardless of which variant was passed.
+        string basePath;
+        if (absolutePath.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase))
+            basePath = absolutePath[..^".disabled".Length];
+        else if (absolutePath.EndsWith(".sample", StringComparison.OrdinalIgnoreCase))
+            return Task.CompletedTask; // samples are immutable
+        else
+            basePath = absolutePath;
 
+        var activePath = basePath;
+        var disabledPath = basePath + ".disabled";
+
+        if (active)
+        {
+            if (File.Exists(disabledPath) && !File.Exists(activePath))
+                File.Move(disabledPath, activePath);
+        }
+        else
+        {
+            if (File.Exists(activePath))
+                File.Move(activePath, disabledPath, overwrite: false);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // Shells out to git config to get core.hooksPath, handling git includes.
+    private static string? ReadCoreHooksPathViaGit(string gitRoot)
+    {
         try
         {
-            var inCore = false;
-            foreach (var line in File.ReadAllLines(configPath, Encoding.UTF8))
+            var psi = new ProcessStartInfo
             {
-                var trimmed = line.Trim();
-                if (trimmed.StartsWith('['))
-                {
-                    inCore = trimmed.StartsWith("[core]", StringComparison.OrdinalIgnoreCase);
-                    continue;
-                }
+                FileName = "git",
+                WorkingDirectory = gitRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("config");
+            psi.ArgumentList.Add("--get");
+            psi.ArgumentList.Add("core.hooksPath");
 
-                if (!inCore) continue;
+            using var proc = Process.Start(psi);
+            if (proc is null) return null;
+            var output = proc.StandardOutput.ReadToEnd().Trim();
+            proc.WaitForExit();
+            return proc.ExitCode == 0 && !string.IsNullOrEmpty(output) ? output : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
-                var eqIdx = trimmed.IndexOf('=', StringComparison.Ordinal);
-                if (eqIdx < 0) continue;
+    // Resolves the default hooks dir via git rev-parse --git-path hooks (worktree-aware).
+    private static string ResolveDefaultHooksPath(string gitRoot)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = gitRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("rev-parse");
+            psi.ArgumentList.Add("--git-path");
+            psi.ArgumentList.Add("hooks");
 
-                var key = trimmed[..eqIdx].Trim();
-                if (!key.Equals("hooksPath", StringComparison.OrdinalIgnoreCase)) continue;
-
-                var value = trimmed[(eqIdx + 1)..].Trim();
-                return string.IsNullOrEmpty(value) ? null : value;
+            using var proc = Process.Start(psi);
+            if (proc is null) return Path.Combine(gitRoot, ".git", "hooks");
+            var output = proc.StandardOutput.ReadToEnd().Trim();
+            proc.WaitForExit();
+            if (proc.ExitCode == 0 && !string.IsNullOrEmpty(output))
+            {
+                return Path.IsPathRooted(output)
+                    ? output
+                    : Path.GetFullPath(Path.Combine(gitRoot, output));
             }
         }
-        catch (IOException)
-        {
-        }
+        catch (Exception) { }
 
-        return null;
+        return Path.Combine(gitRoot, ".git", "hooks");
     }
 
     private static async Task<string> ReadUtf8Async(string path, CancellationToken ct)
@@ -157,20 +268,15 @@ public sealed class GitHooksService : IGitHooksService
     private static GitHookLanguage DetectLanguage(string content)
     {
         if (string.IsNullOrEmpty(content)) return GitHookLanguage.Unknown;
-
         var firstLine = content.Split('\n', 2)[0].Trim();
         if (!firstLine.StartsWith("#!", StringComparison.Ordinal)) return GitHookLanguage.Unknown;
-
         if (firstLine.Contains("pwsh", StringComparison.OrdinalIgnoreCase) ||
             firstLine.Contains("powershell", StringComparison.OrdinalIgnoreCase))
             return GitHookLanguage.Pwsh;
-
         if (firstLine.Contains("/bash", StringComparison.OrdinalIgnoreCase))
             return GitHookLanguage.Bash;
-
         if (firstLine.Contains("/sh", StringComparison.OrdinalIgnoreCase))
             return GitHookLanguage.Sh;
-
         return GitHookLanguage.Unknown;
     }
 }

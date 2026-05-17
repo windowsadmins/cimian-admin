@@ -3,8 +3,7 @@ namespace CimianStudio.Core.Services;
 using CimianStudio.Core.Models.Git;
 
 /// <summary>
-/// Read-only git operations for the currently-open Cimian deployment. Phase 1 of the
-/// git-integration plan: title-bar / home-card awareness only — no write verbs yet.
+/// Git operations for the currently-open Cimian deployment.
 /// All methods return null / empty results (never throw) when no git root is present;
 /// callers should hide UI when <see cref="DiscoverAsync"/> returns null.
 /// </summary>
@@ -30,29 +29,22 @@ public interface IGitService
 
     /// <summary>
     /// Stages the supplied repo-relative paths (works for adds, modifies and deletes).
-    /// Uses LibGit2Sharp directly — no hooks run on staging, matching <c>git add</c>.
     /// </summary>
     Task StageAsync(GitRepositoryInfo info, IEnumerable<string> relativePaths, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Creates a new commit with the given subject + optional body. Shells out to
-    /// <c>git.exe</c> so pre-commit and commit-msg hooks fire by default; pass
-    /// <paramref name="runHooks"/> = false to add <c>--no-verify</c>. The optional
-    /// <paramref name="progress"/> receives each line of stdout/stderr as it streams,
-    /// so the UI can show live hook output instead of sitting silent.
+    /// Creates a new commit. Shells out to <c>git.exe</c> so hooks fire by default;
+    /// pass <paramref name="runHooks"/> = false to add <c>--no-verify</c>.
     /// </summary>
     Task<GitCommitResult> CommitAsync(GitRepositoryInfo info, string subject, string? body, bool runHooks, bool amend = false, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Pushes the current branch to its configured upstream. Shells out to
-    /// <c>git.exe</c> so the Windows credential manager and any SSH agent are used.
-    /// Streams progress lines to <paramref name="progress"/> when supplied.
+    /// Pushes the current branch to its configured upstream.
     /// </summary>
     Task<GitPushResult> PushAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns the configured <c>user.name</c> and <c>user.email</c> for the repo
-    /// (falling back to global config). Either field may be empty if unconfigured.
+    /// Returns the configured <c>user.name</c> and <c>user.email</c> for the repo.
     /// </summary>
     Task<GitIdentity> GetIdentityAsync(GitRepositoryInfo info, CancellationToken cancellationToken = default);
 
@@ -62,16 +54,12 @@ public interface IGitService
     Task SetIdentityAsync(GitRepositoryInfo info, string name, string email, GitConfigScope scope, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lightweight credential probe — runs <c>git ls-remote --heads origin</c> and
-    /// reports success/failure with the git output, so the user can validate their
-    /// credentials before they spend time crafting a commit that won't push.
+    /// Runs <c>git ls-remote --heads origin</c> to validate remote credentials.
     /// </summary>
     Task<GitAuthResult> TestAuthAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns a unified-diff text representation of the working-tree change for one
-    /// file. Empty string if the path is unchanged. Untracked files are emitted as
-    /// "+ "-prefixed line dumps. Binary blobs return a short marker rather than bytes.
+    /// Returns the unified-diff for one working-tree file.
     /// </summary>
     Task<string> GetDiffAsync(GitRepositoryInfo info, string relativePath, CancellationToken cancellationToken = default);
 
@@ -81,64 +69,77 @@ public interface IGitService
     Task<IReadOnlyList<GitBranch>> GetBranchesAsync(GitRepositoryInfo info, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Checks out an existing local branch. Fails (returns Success=false with an
-    /// error message) when the working tree has uncommitted changes that would
-    /// conflict with the target branch.
+    /// Checks out an existing local branch.
     /// </summary>
     Task<GitCheckoutResult> CheckoutBranchAsync(GitRepositoryInfo info, string branchName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Walks the commit history of the current branch, returning the most recent
-    /// <paramref name="limit"/> commits (oldest dropped first). Returns an empty list
-    /// when the repo has no commits yet.
+    /// Returns the commit history for all branches (topo-order), enriched with
+    /// parent SHAs and ref decorations for graph and badge rendering.
     /// </summary>
     Task<IReadOnlyList<GitCommit>> GetHistoryAsync(GitRepositoryInfo info, int limit = 200, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns the unified-diff text for a commit (diff against its first parent;
-    /// for root commits, diff against the empty tree). Concatenates per-file diffs
-    /// with standard <c>diff --git</c> headers so the Git page can highlight the same
-    /// way as working-tree diffs.
+    /// Returns the unified-diff text for a commit (diff against its first parent).
     /// </summary>
     Task<string> GetCommitDiffAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns the full <c>git format-patch -1 --stdout &lt;sha&gt;</c> output for a
-    /// single commit — i.e. the canonical mbox-style patch with <c>From</c> header,
-    /// author, date, subject, commit body, then the unified diff. Suitable for
-    /// piping into <c>git am</c> or for pasting into a PR review.
+    /// Returns the full <c>git format-patch -1 --stdout</c> output for a single commit.
     /// </summary>
     Task<string> FormatPatchAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Runs <c>git fetch</c> for the configured remote (default <c>origin</c>).
-    /// Shells out so credential manager + progress output match the CLI.
+    /// Runs <c>git fetch --all --prune</c>.
     /// </summary>
     Task<GitFetchResult> FetchAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Runs <c>git pull --rebase --autostash</c>. Rebase + autostash is the default
-    /// because it keeps history linear and survives a dirty working tree without
-    /// needing the user to stage or stash by hand.
+    /// Runs <c>git pull --rebase --autostash</c>.
     /// </summary>
     Task<GitPullResult> PullAsync(GitRepositoryInfo info, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Creates a lightweight or annotated tag at the given commit SHA.</summary>
+    Task<GitSimpleResult> TagCommitAsync(GitRepositoryInfo info, string sha, string tagName, string? annotation = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Creates a new branch pointing at the given commit SHA.</summary>
+    Task<GitSimpleResult> CreateBranchAtAsync(GitRepositoryInfo info, string sha, string branchName, CancellationToken cancellationToken = default);
+
+    /// <summary>Checks out a commit in detached-HEAD mode.</summary>
+    Task<GitSimpleResult> CheckoutCommitAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
+
+    /// <summary>Cherry-picks the given commit onto HEAD.</summary>
+    Task<GitSimpleResult> CherryPickAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
+
+    /// <summary>Reverts the given commit (creates a new revert commit).</summary>
+    Task<GitSimpleResult> RevertCommitAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
+
+    /// <summary>Merges the given commit into HEAD.</summary>
+    Task<GitSimpleResult> MergeCommitAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
+
+    /// <summary>Rebases the current branch onto the given commit.</summary>
+    Task<GitSimpleResult> RebaseOntoAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
+
+    /// <summary>Resets HEAD to the given commit with the specified mode.</summary>
+    Task<GitSimpleResult> ResetToAsync(GitRepositoryInfo info, string sha, GitResetMode mode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Rewrites the commit message for the given SHA. Uses amend for HEAD;
+    /// uses interactive rebase with a non-interactive sequence+message editor for any older commit.
+    /// </summary>
+    Task<GitSimpleResult> EditCommitMessageAsync(GitRepositoryInfo info, string sha, string newMessage, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the full commit message body (subject + body) for the given SHA.</summary>
+    Task<string> GetCommitMessageAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Outcome of <see cref="IGitService.CommitAsync"/>.</summary>
-/// <param name="Success">True if <c>git commit</c> exited 0.</param>
-/// <param name="CommitSha">First 12 chars of the new commit, when known.</param>
-/// <param name="Output">Combined stdout+stderr (hook output lands here when it fails).</param>
 public sealed record GitCommitResult(bool Success, string? CommitSha, string Output);
 
 /// <summary>Outcome of <see cref="IGitService.PushAsync"/>.</summary>
-/// <param name="Success">True if <c>git push</c> exited 0.</param>
-/// <param name="Output">Combined stdout+stderr.</param>
 public sealed record GitPushResult(bool Success, string Output);
 
 /// <summary>One local branch.</summary>
-/// <param name="Name">Friendly branch name (e.g. <c>main</c>).</param>
-/// <param name="IsCurrent">True if this branch is currently checked out.</param>
-/// <param name="TipSha">First 12 chars of the branch tip commit, or null if unknown.</param>
 public sealed record GitBranch(string Name, bool IsCurrent, string? TipSha);
 
 /// <summary>Outcome of <see cref="IGitService.FetchAsync"/>.</summary>
@@ -147,13 +148,27 @@ public sealed record GitFetchResult(bool Success, string Output);
 /// <summary>Outcome of <see cref="IGitService.PullAsync"/>.</summary>
 public sealed record GitPullResult(bool Success, string Output);
 
-/// <summary>One commit entry from the history walk.</summary>
-/// <param name="Sha">First 12 chars of the commit hash.</param>
-/// <param name="Subject">First line of the commit message.</param>
-/// <param name="AuthorName">Author display name.</param>
-/// <param name="AuthorEmail">Author email.</param>
-/// <param name="When">Author timestamp.</param>
-public sealed record GitCommit(string Sha, string Subject, string AuthorName, string AuthorEmail, DateTimeOffset When);
+/// <summary>
+/// One commit entry from the history walk.
+/// The positional constructor preserves backward compatibility; the init properties
+/// carry enriched data populated by the git-CLI history parser.
+/// </summary>
+public sealed record GitCommit(
+    string Sha,
+    string Subject,
+    string AuthorName,
+    string AuthorEmail,
+    DateTimeOffset When)
+{
+    /// <summary>Full 40-char SHA.</summary>
+    public string FullSha { get; init; } = "";
+
+    /// <summary>Full SHAs of parent commits (empty for root commits).</summary>
+    public IReadOnlyList<string> ParentShas { get; init; } = [];
+
+    /// <summary>Ref decorations (branches, tags, HEAD) pointing at this commit.</summary>
+    public IReadOnlyList<CommitRef> Refs { get; init; } = [];
+}
 
 /// <summary>Outcome of <see cref="IGitService.CheckoutBranchAsync"/>.</summary>
 public sealed record GitCheckoutResult(bool Success, string? ErrorMessage);
@@ -164,13 +179,20 @@ public sealed record GitIdentity(string Name, string Email);
 /// <summary>Where to write a git config value.</summary>
 public enum GitConfigScope
 {
-    /// <summary>Repository-local <c>.git/config</c>.</summary>
     Local,
-    /// <summary>The user's global <c>.gitconfig</c>.</summary>
     Global,
 }
 
 /// <summary>Outcome of <see cref="IGitService.TestAuthAsync"/>.</summary>
-/// <param name="Success">True if the remote responded successfully.</param>
-/// <param name="Output">Combined stdout+stderr from <c>git ls-remote</c>.</param>
 public sealed record GitAuthResult(bool Success, string Output);
+
+/// <summary>Generic success/output result for simple git operations.</summary>
+public sealed record GitSimpleResult(bool Success, string Output);
+
+/// <summary>Reset mode for <see cref="IGitService.ResetToAsync"/>.</summary>
+public enum GitResetMode
+{
+    Soft,
+    Mixed,
+    Hard,
+}

@@ -2,7 +2,7 @@ namespace CimianStudio.Core.Models.Git;
 
 public enum GitHookState
 {
-    Missing,
+    Inactive,
     SampleOnly,
     Disabled,
     Active,

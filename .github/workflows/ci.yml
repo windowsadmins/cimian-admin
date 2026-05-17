@@ -26,11 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # CimianStudio has a ProjectReference to ../../../../packages/CimianTools/shared/import/Cimian.Import.csproj
+      # CimianStudio has ProjectReferences to ../../../../packages/CimianTools/shared/
       # (the sibling-submodule layout we use locally under a parent Cimian folder).
       # CI checks out cimianstudio in isolation, so clone the public cimian repo
-      # directly into the slot the ProjectReference expects.
-      - name: Checkout CimianTools sibling (for Cimian.Import ProjectReference)
+      # directly into the slot the ProjectReferences expect. Both Cimian.Import and
+      # the YamlUtils consolidation now live on main (cimian PRs #26 and #28).
+      - name: Checkout CimianTools sibling (for shared library ProjectReferences)
         shell: pwsh
         run: |
           # GITHUB_WORKSPACE is D:\a\<repo>\<repo>\ (double-nested), and the
@@ -40,11 +41,13 @@ jobs:
           $siblingRoot = (Resolve-Path "$env:GITHUB_WORKSPACE\..\..").Path
           $target = Join-Path $siblingRoot 'packages\CimianTools'
           New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null
-          # The Cimian.Import library extraction lives on feature/import-prompter
-          # (cimian PR #26). Once that PR merges to main, drop the --branch flag.
-          git clone --depth=1 --branch=feature/import-prompter https://github.com/windowsadmins/cimian.git $target
-          if (-not (Test-Path "$target\shared\import\Cimian.Import.csproj")) {
-            throw "Cimian.Import.csproj not found at expected path: $target\shared\import\Cimian.Import.csproj"
+          git clone --depth=1 https://github.com/windowsadmins/cimian.git $target
+          foreach ($required in @(
+            "$target\shared\import\Cimian.Import.csproj",
+            "$target\shared\core\Services\YamlUtils.cs")) {
+            if (-not (Test-Path $required)) {
+              throw "Required upstream file not found: $required"
+            }
           }
 
       - name: Setup .NET

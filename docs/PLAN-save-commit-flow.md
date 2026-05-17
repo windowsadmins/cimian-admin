@@ -5,7 +5,7 @@ Depends on: `PLAN-git-integration.md` (phases 1 & 2)
 
 ## Goal
 
-When the user saves a pkginfo or manifest edit, offer to commit it to the git working tree. Allow batching multiple pending file changes into a single commit with a subject + body, via a checkbox list. This replaces the manual `git add … && git commit -m …` loop after every CimianAdmin save.
+When the user saves a pkginfo or manifest edit, offer to commit it to the git working tree. Allow batching multiple pending file changes into a single commit with a subject + body, via a checkbox list. This replaces the manual `git add … && git commit -m …` loop after every CimianStudio save.
 
 ## Trigger surfaces
 

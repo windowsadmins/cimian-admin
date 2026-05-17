@@ -1,8 +1,8 @@
-# CimianAdmin Project Plan
+# CimianStudio Project Plan
 
 ## Overview
 
-CimianAdmin is a native Windows GUI application for managing Cimian software deployment repositories. It provides similar functionality to MunkiAdmin (macOS) but is designed specifically for Windows and Cimian.
+CimianStudio is a native Windows GUI application for managing Cimian software deployment repositories. It provides similar functionality to MunkiAdmin (macOS) but is designed specifically for Windows and Cimian.
 
 ## Goals
 
@@ -28,27 +28,27 @@ CimianAdmin is a native Windows GUI application for managing Cimian software dep
 ## Project Structure
 
 ```
-CimianAdmin/
+CimianStudio/
   src/
-    CimianAdmin/                    # WinUI 3 application
+    CimianStudio/                    # WinUI 3 application
       Views/                        # XAML views
       ViewModels/                   # View models
       Services/                     # Application services
       Helpers/                      # UI helpers
       Assets/                       # Icons and resources
-    CimianAdmin.Core/               # Domain layer
+    CimianStudio.Core/               # Domain layer
       Models/                       # Domain models
       Services/                     # Service interfaces
-    CimianAdmin.Infrastructure/     # Infrastructure layer
+    CimianStudio.Infrastructure/     # Infrastructure layer
       Serialization/                # YAML serialization
       FileSystem/                   # File system operations
       Tools/                        # Cimian tools integration
       Data/                         # EF Core context
-    CimianAdmin.Shared/             # Shared code
+    CimianStudio.Shared/             # Shared code
       Constants/                    # Application constants
   tests/
-    CimianAdmin.Core.Tests/
-    CimianAdmin.Infrastructure.Tests/
+    CimianStudio.Core.Tests/
+    CimianStudio.Infrastructure.Tests/
   samples/
     SampleRepository/               # Test repository
   docs/
@@ -202,6 +202,6 @@ Represents conditional deployment logic with:
 
 ## Repository
 
-- GitHub: https://github.com/windowsadmins/cimianadmin
+- GitHub: https://github.com/windowsadmins/cimianstudio
 - License: MIT
 - Contributing: See CONTRIBUTING.md

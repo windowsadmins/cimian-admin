@@ -1,12 +1,12 @@
 # Plan — first-class Git integration
 
 Status: planning (not yet implemented)
-Owner: CimianAdmin
-Goal: CimianAdmin operates as a GitOps client — fetch, pull, commit, push, hook-aware — for any repository, even when the Cimian deployment tree lives in a subdirectory of a larger git repo.
+Owner: CimianStudio
+Goal: CimianStudio operates as a GitOps client — fetch, pull, commit, push, hook-aware — for any repository, even when the Cimian deployment tree lives in a subdirectory of a larger git repo.
 
 ## Why
 
-The Cimian deployment repo today lives at `Cimian/deployment/` inside a parent git repository. Admins manually `git add deployment/manifests/X.yaml` from the terminal after every CimianAdmin save. The friction kills the "edit and ship" loop and invites stale, never-promoted edits. Making CimianAdmin git-aware lets us:
+The Cimian deployment repo today lives at `Cimian/deployment/` inside a parent git repository. Admins manually `git add deployment/manifests/X.yaml` from the terminal after every CimianStudio save. The friction kills the "edit and ship" loop and invites stale, never-promoted edits. Making CimianStudio git-aware lets us:
 
 - Show pending changes directly in the app (per-file, with diffs).
 - Group multiple edits into a single semantic commit ("Promote Office to Production").
@@ -39,8 +39,8 @@ So the split is:
 ### Service layout
 
 ```
-CimianAdmin.Core/Services/IGitService.cs
-CimianAdmin.Infrastructure/Services/GitService.cs
+CimianStudio.Core/Services/IGitService.cs
+CimianStudio.Infrastructure/Services/GitService.cs
   - DiscoverGitRootAsync(string deploymentRoot)
   - GetStatusAsync(GitRoot root, string scopeRelative)
   - GetDiffAsync(GitRoot root, string filePath)
@@ -98,11 +98,11 @@ If `commit.gpgsign` or `gpg.format = ssh` is set, `git.exe` handles it. We don't
 
 ## Credentials
 
-For push/fetch over HTTPS, rely on the Windows credential manager via `git.exe` (it picks up `git-credential-manager`). For SSH, rely on `OpenSSH` agent. CimianAdmin should never store credentials itself.
+For push/fetch over HTTPS, rely on the Windows credential manager via `git.exe` (it picks up `git-credential-manager`). For SSH, rely on `OpenSSH` agent. CimianStudio should never store credentials itself.
 
 ## Subfolder repos — explicit handling
 
-When CimianAdmin opens `C:\Cimian\deployment\` and the actual git root is `C:\Cimian\`:
+When CimianStudio opens `C:\Cimian\deployment\` and the actual git root is `C:\Cimian\`:
 
 - `GitService.GetStatusAsync(root, "Cimian/deployment")` calls `git status --porcelain -- Cimian/deployment` (pathspec-scoped).
 - Diffs and commits also use the pathspec so unrelated changes elsewhere in the parent repo don't leak into our UI.

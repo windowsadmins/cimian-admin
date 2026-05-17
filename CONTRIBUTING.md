@@ -1,6 +1,6 @@
-# Contributing to CimianAdmin
+# Contributing to CimianStudio
 
-Thank you for your interest in contributing to CimianAdmin. This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to CimianStudio. This document provides guidelines and information for contributors.
 
 ## Getting Started
 
@@ -22,8 +22,8 @@ Thank you for your interest in contributing to CimianAdmin. This document provid
 ### Building the Project
 
 ```powershell
-git clone https://github.com/windowsadmins/cimianadmin.git
-cd cimianadmin
+git clone https://github.com/windowsadmins/cimianstudio.git
+cd cimianstudio
 dotnet restore
 dotnet build
 ```
@@ -74,7 +74,7 @@ When reporting issues, please include:
 - A clear description of the problem
 - Steps to reproduce
 - Expected vs actual behavior
-- CimianAdmin version
+- CimianStudio version
 - Windows version
 - Any relevant error messages or logs
 

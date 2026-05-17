@@ -1,6 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <RootNamespace>CimianAdmin.Shared</RootNamespace>
-    <AssemblyName>CimianAdmin.Shared</AssemblyName>
-  </PropertyGroup>
-</Project>

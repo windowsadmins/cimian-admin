@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="CimianStudio.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:shapes="using:Microsoft.UI.Xaml.Shapes">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Reusable card surface. Shadow is applied per-card via Border.Shadow
+                 + Translation since Translation can't be set in a Style setter
+                 (no string→Vector3 converter for setters in WinUI 3). -->
+            <ThemeShadow x:Key="CardShadow" />
+            <Style x:Key="CardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+            </Style>
+
+            <!-- Lucide icon system for content sites: rendered as <Path Stroke="..."/>
+                 with the LucidePath Style below; Stroke is a ThemeResource so it retints
+                 on theme switches.
+
+                 The 5 NavigationViewItem.Icon slots in MainWindow.xaml use PathIcon with
+                 Fluent UI System Icons geometry — IconElement isn't user-derivable in
+                 WinUI 3 and PathIcon fills rather than strokes, so single-path Fluent
+                 SVGs (whose path data already traces an outline-style shape) give the
+                 right look there while still picking up Foreground from the theme. -->
+            <Style x:Key="LucidePath" TargetType="shapes:Path">
+                <Setter Property="Stroke" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                <Setter Property="StrokeThickness" Value="2" />
+                <Setter Property="StrokeStartLineCap" Value="Round" />
+                <Setter Property="StrokeEndLineCap" Value="Round" />
+                <Setter Property="StrokeLineJoin" Value="Round" />
+                <Setter Property="Fill" Value="Transparent" />
+            </Style>
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

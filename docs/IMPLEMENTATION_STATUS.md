@@ -1,4 +1,4 @@
-# CimianAdmin Implementation Status
+# CimianStudio Implementation Status
 
 Last updated: 2026-05-09
 
@@ -8,25 +8,25 @@ The app **launches** as a WinUI 3 window and can read a Cimian repository direct
 
 Verified flow on a real deployment repository (`Cimian/deployment` — 394 pkginfo, 615 manifests, 5 catalogs):
 
-1. Run `dotnet build src/CimianAdmin/CimianAdmin.csproj -c Debug -p:Platform=x64`.
-2. Launch `src\CimianAdmin\bin\x64\Debug\net10.0-windows10.0.19041.0\CimianAdmin.exe`.
+1. Run `dotnet build src/CimianStudio/CimianStudio.csproj -c Debug -p:Platform=x64`.
+2. Launch `src\CimianStudio\bin\x64\Debug\net10.0-windows10.0.19041.0\CimianStudio.exe`.
 3. Click **Browse...**, pick a directory.
 4. Click **Open Repository** — it prints OK/missing for `catalogs/`, `manifests/`, `pkgsinfo/`, `pkgs/` plus a count of YAML files in each.
 
 ## What was added in the bootstrap session (2026-05-09)
 
-### Models — `src/CimianAdmin.Core/Models/Packages/`
+### Models — `src/CimianStudio.Core/Models/Packages/`
 
 - `Package.cs` — full pkginfo model with YamlDotNet attributes. Fields: name, display_name, version, description, developer, category, catalogs, installer, uninstaller, unattended_install (default true), unattended_uninstall (default true), autoremove (default false), installs, supported_architectures, minimum_os_version, blocking_applications, requires, update_for, notes. Repository metadata (FilePath, LastModified) marked `[YamlIgnore]`. Computed `EffectiveDisplayName` returns DisplayName ?? Name.
 - `Installer.cs` — type, location, arguments, hash, hash_algorithm, size.
 - `Uninstaller.cs` — type, location, arguments.
 - `InstallsItem.cs` — type, path, version, version_comparison, hash, hash_algorithm, registry_key, registry_value, product_code, upgrade_code.
 
-### App shell — `src/CimianAdmin/`
+### App shell — `src/CimianStudio/`
 
 - `App.xaml` + `App.xaml.cs` — minimal WinUI 3 application with default XamlControlsResources. **No DI yet.**
-- `MainWindow.xaml` + `MainWindow.xaml.cs` — single-page welcome shell with Repository TextBox, Browse button (FolderPicker via `WinRT.Interop.InitializeWithWindow`), Open button. On open it lists subdirectory presence and YAML file counts. **Title bar shows `CimianAdmin 0.1.0`.**
-- `Assets/.gitkeep` — placeholder so the existing `Content Include="Assets\**"` glob in `CimianAdmin.csproj` doesn't fail.
+- `MainWindow.xaml` + `MainWindow.xaml.cs` — single-page welcome shell with Repository TextBox, Browse button (FolderPicker via `WinRT.Interop.InitializeWithWindow`), Open button. On open it lists subdirectory presence and YAML file counts. **Title bar shows `CimianStudio 0.1.0`.**
+- `Assets/.gitkeep` — placeholder so the existing `Content Include="Assets\**"` glob in `CimianStudio.csproj` doesn't fail.
 
 ### Build configuration — `Directory.Build.props`
 
@@ -50,7 +50,7 @@ Already bumped in the previous session to `Microsoft.EntityFrameworkCore 10.0.0-
 
 The current app is **Phase 1 scaffolding only**. To replicate [MunkiAdmin](https://github.com/hjuutilainen/munkiadmin) on Windows you need everything in `NEXT_STEPS.md`. The high-level gap:
 
-| Surface | MunkiAdmin has | CimianAdmin has |
+| Surface | MunkiAdmin has | CimianStudio has |
 |---|---|---|
 | App shell | NavigationView with sections + master/detail | Single-page welcome only |
 | Persistence | Reopens last repo on launch; recent repos menu | Nothing — re-enters Browse every time |
@@ -63,7 +63,7 @@ The current app is **Phase 1 scaffolding only**. To replicate [MunkiAdmin](https
 | Scripts | Editor for pre/post install/uninstall | Not implemented |
 | Application Usage | Reads usage data | N/A |
 | Cimian tools | Run `makecatalogs`/`cimiimport` from inside the app | Not implemented |
-| Service implementations | — | **All four `IxService` interfaces in `CimianAdmin.Core/Services/` have NO implementations.** `CimianAdmin.Infrastructure` project is empty. |
+| Service implementations | — | **All four `IxService` interfaces in `CimianStudio.Core/Services/` have NO implementations.** `CimianStudio.Infrastructure` project is empty. |
 
 ## Key files for orientation
 
@@ -71,10 +71,10 @@ The current app is **Phase 1 scaffolding only**. To replicate [MunkiAdmin](https
 - `docs/NEXT_STEPS.md` — concrete implementation plan for the next session
 - `samples/SampleRepository/` — minimal test repo with one Firefox pkginfo + one site_default manifest
 - `Cimian/deployment/` (parent repo) — real-world repo with 394 pkginfo / 615 manifests / 5 catalogs for stress testing
-- `src/CimianAdmin.Core/Services/I{Repository,Package,Manifest,Catalog}Service.cs` — interfaces ready to implement
-- `tests/CimianAdmin.Core.Tests/Models/PackageTests.cs` — passing tests for the Package model
-- `tests/CimianAdmin.Core.Tests/Models/ManifestTests.cs` — existing manifest tests
+- `src/CimianStudio.Core/Services/I{Repository,Package,Manifest,Catalog}Service.cs` — interfaces ready to implement
+- `tests/CimianStudio.Core.Tests/Models/PackageTests.cs` — passing tests for the Package model
+- `tests/CimianStudio.Core.Tests/Models/ManifestTests.cs` — existing manifest tests
 
 ## CI status
 
-`.github/workflows/{ci,release}.yml` exist and the CI build is **green** as of the previous session (after the analyzer suppressions). Adding new code in the next session needs to keep CI green — re-run `dotnet build CimianAdmin.sln -c Release` locally before pushing.
+`.github/workflows/{ci,release}.yml` exist and the CI build is **green** as of the previous session (after the analyzer suppressions). Adding new code in the next session needs to keep CI green — re-run `dotnet build CimianStudio.sln -c Release` locally before pushing.

@@ -1,4 +1,4 @@
-# CimianAdmin — Next Implementation Session
+# CimianStudio — Next Implementation Session
 
 Last updated: 2026-05-09
 Goal: take the launchable scaffold from `IMPLEMENTATION_STATUS.md` to a usable MunkiAdmin-equivalent on Windows.
@@ -7,11 +7,11 @@ Goal: take the launchable scaffold from `IMPLEMENTATION_STATUS.md` to a usable M
 
 - **Read** `IMPLEMENTATION_STATUS.md` for what already exists and what doesn't.
 - **Read** `PROJECT_PLAN.md` for the original phased plan.
-- **Working dir** for this session: `C:\Users\rchristiansen\Developer\AzDevOps\Devices\Cimian\packages\CimianAdmin\`.
+- **Working dir** for this session: `C:\Users\rchristiansen\Developer\AzDevOps\Devices\Cimian\packages\CimianStudio\`.
 - **Build/launch loop:**
   ```pwsh
-  dotnet build src\CimianAdmin\CimianAdmin.csproj -c Debug -p:Platform=x64
-  src\CimianAdmin\bin\x64\Debug\net10.0-windows10.0.19041.0\CimianAdmin.exe
+  dotnet build src\CimianStudio\CimianStudio.csproj -c Debug -p:Platform=x64
+  src\CimianStudio\bin\x64\Debug\net10.0-windows10.0.19041.0\CimianStudio.exe
   ```
 - **Real test data:** `..\..\deployment\` (Cimian's deployment repo) — 394 pkginfo, 615 manifests, 5 catalogs. Use it for performance and edge cases.
 - **Sample data:** `samples\SampleRepository\` — one Firefox pkginfo, one manifest. Use it for unit-testing the round-trip.
@@ -27,7 +27,7 @@ Goal: take the launchable scaffold from `IMPLEMENTATION_STATUS.md` to a usable M
 ## Recommended target architecture
 
 ```
-src/CimianAdmin/
+src/CimianStudio/
   App.xaml(.cs)                    -- Hosts Microsoft.Extensions.Hosting; resolves MainWindow
   MainWindow.xaml(.cs)             -- NavigationView shell; switches Frame content
   Views/
@@ -49,17 +49,17 @@ src/CimianAdmin/
   Services/
     INavigationService.cs / NavigationService.cs
 
-src/CimianAdmin.Infrastructure/   -- currently empty; needs:
+src/CimianStudio.Infrastructure/   -- currently empty; needs:
   Yaml/YamlSerialization.cs        -- One DeserializerBuilder + SerializerBuilder shared by all
   Services/RepositoryService.cs    -- Implements IRepositoryService; raises RepositoryChanged
   Services/PackageService.cs       -- Implements IPackageService; loads + saves YAML
   Services/ManifestService.cs      -- Implements IManifestService
   Services/CatalogService.cs       -- Implements ICatalogService; spawns makecatalogs.exe
   Settings/ISettingsService.cs / JsonSettingsService.cs
-                                   -- Reads/writes %LOCALAPPDATA%\CimianAdmin\settings.json
+                                   -- Reads/writes %LOCALAPPDATA%\CimianStudio\settings.json
                                    -- Tracks LastRepositoryPath + RecentRepositories (max 10)
 
-tests/CimianAdmin.Infrastructure.Tests/
+tests/CimianStudio.Infrastructure.Tests/
   YamlRoundTripTests.cs            -- Round-trips samples/SampleRepository/.../Firefox.yaml
   RepositoryServiceTests.cs        -- Validates against samples + temp dirs
 ```
@@ -68,11 +68,11 @@ tests/CimianAdmin.Infrastructure.Tests/
 
 ### Step 1 — Infrastructure services (no UI changes yet)
 
-**File:** `src/CimianAdmin.Infrastructure/Yaml/YamlSerialization.cs`
+**File:** `src/CimianStudio.Infrastructure/Yaml/YamlSerialization.cs`
 
 Build a static class with a `Serializer` and `Deserializer` configured with `IgnoreUnmatchedProperties()` and `WithNamingConvention(UnderscoredNamingConvention.Instance)`. Used by all three services.
 
-**File:** `src/CimianAdmin.Infrastructure/Services/RepositoryService.cs`
+**File:** `src/CimianStudio.Infrastructure/Services/RepositoryService.cs`
 
 Implement `IRepositoryService`:
 - `OpenRepositoryAsync(path)`: validate the four subdirs exist (`catalogs`, `manifests`, `pkgsinfo`, `pkgs`); set `IsValid` accordingly; populate counts via `Directory.EnumerateFiles(..., "*.yaml", SearchOption.AllDirectories).Count()`.
@@ -81,7 +81,7 @@ Implement `IRepositoryService`:
 - `RefreshStatisticsAsync`: re-counts.
 - Raise `RepositoryChanged` whenever `CurrentRepository` changes.
 
-**File:** `src/CimianAdmin.Infrastructure/Services/PackageService.cs`
+**File:** `src/CimianStudio.Infrastructure/Services/PackageService.cs`
 
 Implement `IPackageService`:
 - `GetAllPackagesAsync()`: enumerate `pkgsinfo/**/*.yaml`, deserialize each into `Package`, set `FilePath` and `LastModified` from `FileInfo`. Use `Parallel.ForEachAsync` (or `Task.WhenAll`) — 394 files needs to be fast.
@@ -94,11 +94,11 @@ Implement `IPackageService`:
 - `ImportPackageAsync(installerPath)`: shell out to `cimiimport.exe` (under `C:\Program Files\Cimian\`); deserialize the output.
 - Raise `PackagesChanged` after save/create/delete.
 
-**File:** `src/CimianAdmin.Infrastructure/Services/ManifestService.cs`
+**File:** `src/CimianStudio.Infrastructure/Services/ManifestService.cs`
 
 Same shape as PackageService but for `manifests/`.
 
-**File:** `src/CimianAdmin.Infrastructure/Services/CatalogService.cs`
+**File:** `src/CimianStudio.Infrastructure/Services/CatalogService.cs`
 
 - `GetAllCatalogsAsync()`: enumerate `catalogs/*.yaml`, deserialize as `List<Package>` (a catalog is a list of pkginfo entries, NOT separate Catalog objects). Each becomes a `Catalog { Name = filename, Packages = ... }`.
 - `GetCatalogNamesAsync()`: union of all `Catalogs` arrays across packages, plus existing files.
@@ -106,7 +106,7 @@ Same shape as PackageService but for `manifests/`.
 
 **Settings:**
 
-`src/CimianAdmin.Shared/Settings/AppSettings.cs`:
+`src/CimianStudio.Shared/Settings/AppSettings.cs`:
 ```csharp
 public sealed class AppSettings
 {
@@ -118,13 +118,13 @@ public sealed class AppSettings
 }
 ```
 
-`src/CimianAdmin.Shared/Settings/ISettingsService.cs` + `src/CimianAdmin.Infrastructure/Settings/JsonSettingsService.cs`:
-- Path: `%LOCALAPPDATA%\CimianAdmin\settings.json`
+`src/CimianStudio.Shared/Settings/ISettingsService.cs` + `src/CimianStudio.Infrastructure/Settings/JsonSettingsService.cs`:
+- Path: `%LOCALAPPDATA%\CimianStudio\settings.json`
 - Methods: `Task<AppSettings> LoadAsync()`, `Task SaveAsync(AppSettings)`, `Task RecordRepositoryAsync(string path)` (sets LastRepositoryPath, prepends to RecentRepositories, deduplicates, trims to MaxRecentRepositories).
 
 ### Step 2 — DI bootstrap
 
-**File:** `src/CimianAdmin/App.xaml.cs`
+**File:** `src/CimianStudio/App.xaml.cs`
 
 Replace the bare `App()` with a `Microsoft.Extensions.Hosting.IHost` setup:
 
@@ -170,10 +170,10 @@ public partial class App : Application
 
 ### Step 3 — Replace MainWindow with a NavigationView shell
 
-**File:** `src/CimianAdmin/MainWindow.xaml`
+**File:** `src/CimianStudio/MainWindow.xaml`
 
 ```xml
-<Window x:Class="CimianAdmin.MainWindow" ...>
+<Window x:Class="CimianStudio.MainWindow" ...>
     <Grid>
         <NavigationView x:Name="NavView"
                         IsBackButtonVisible="Collapsed"
@@ -201,7 +201,7 @@ public partial class App : Application
 </Window>
 ```
 
-**File:** `src/CimianAdmin/MainWindow.xaml.cs`
+**File:** `src/CimianStudio/MainWindow.xaml.cs`
 
 - On selection change, `ContentFrame.Navigate(typeof(...))` to the right page.
 - Subscribe to `IRepositoryService.RepositoryChanged` to update `RepoPathText` and re-enable nav items.
@@ -260,10 +260,10 @@ public partial class PackagesViewModel : ObservableObject
 
 ## Tests to add as you go
 
-- `tests/CimianAdmin.Infrastructure.Tests/Yaml/PackageRoundTripTests.cs` — load `samples/SampleRepository/pkgsinfo/Mozilla/Firefox.yaml`, deserialize, re-serialize, compare structurally.
-- `tests/CimianAdmin.Infrastructure.Tests/Services/RepositoryServiceTests.cs` — open `samples/SampleRepository`, assert IsValid, counts.
-- `tests/CimianAdmin.Infrastructure.Tests/Services/PackageServiceTests.cs` — GetAllPackagesAsync count, search.
-- `tests/CimianAdmin.Infrastructure.Tests/Settings/JsonSettingsServiceTests.cs` — round-trip in temp dir.
+- `tests/CimianStudio.Infrastructure.Tests/Yaml/PackageRoundTripTests.cs` — load `samples/SampleRepository/pkgsinfo/Mozilla/Firefox.yaml`, deserialize, re-serialize, compare structurally.
+- `tests/CimianStudio.Infrastructure.Tests/Services/RepositoryServiceTests.cs` — open `samples/SampleRepository`, assert IsValid, counts.
+- `tests/CimianStudio.Infrastructure.Tests/Services/PackageServiceTests.cs` — GetAllPackagesAsync count, search.
+- `tests/CimianStudio.Infrastructure.Tests/Settings/JsonSettingsServiceTests.cs` — round-trip in temp dir.
 
 ## Things I expect will trip you up
 
@@ -283,7 +283,7 @@ Minimum bar to declare the next session a success:
 - Packages section: list of all packages in the repo with search, click a row to see its full pkginfo in an editor (read-only is OK for v1).
 - Manifests section: list with view-only editor.
 - Catalogs section: list of catalogs, click one to see its packages.
-- CI is still green (`dotnet build CimianAdmin.sln -c Release` passes locally and on push).
+- CI is still green (`dotnet build CimianStudio.sln -c Release` passes locally and on push).
 
 Stretch goals for the same session:
 
@@ -305,11 +305,11 @@ Stretch goals for the same session:
 
 ## Where to commit
 
-The CimianAdmin repo is a git submodule. Push commits directly to `main` on https://github.com/windowsadmins/cimian-admin. The parent Cimian repo can be left with a stale submodule pointer for now; bump it at the end of the session if desired.
+The CimianStudio repo is a git submodule. Push commits directly to `main` on https://github.com/windowsadmins/cimianstudio. The parent Cimian repo can be left with a stale submodule pointer for now; bump it at the end of the session if desired.
 
 ## How to start the next session
 
 ```pwsh
-cd C:\Users\rchristiansen\Developer\AzDevOps\Devices\Cimian\packages\CimianAdmin
+cd C:\Users\rchristiansen\Developer\AzDevOps\Devices\Cimian\packages\CimianStudio
 claude  # then: "Read docs/IMPLEMENTATION_STATUS.md and docs/NEXT_STEPS.md, then begin Step 1"
 ```

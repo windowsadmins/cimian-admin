@@ -1,6 +1,6 @@
 # Sample Cimian Repository
 
-This is a sample Cimian repository for testing CimianAdmin during development.
+This is a sample Cimian repository for testing CimianStudio during development.
 
 ## Structure
 
@@ -14,9 +14,9 @@ SampleRepository/
 
 ## Usage
 
-Use this repository to test CimianAdmin features during development:
+Use this repository to test CimianStudio features during development:
 
-1. Open CimianAdmin
+1. Open CimianStudio
 2. Select "Open Repository"
 3. Navigate to this SampleRepository folder
 4. Browse and edit the sample packages and manifests

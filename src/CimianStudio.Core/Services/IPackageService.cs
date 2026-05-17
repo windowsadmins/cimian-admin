@@ -64,12 +64,13 @@ public interface IPackageService
     Task<IReadOnlyList<Package>> SearchPackagesAsync(string searchText, string? catalog = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Imports a package from an installer file.
+    /// Manually fires <see cref="PackagesChanged"/>. Used by the import wizard
+    /// after handing the actual disk write off to <c>Cimian.CLI.Cimiimport.Services.ImportService</c>:
+    /// since that path bypasses <see cref="CreatePackageAsync"/>, the event
+    /// won't fire on its own and downstream views (Packages tab, Catalogs tab)
+    /// won't refresh.
     /// </summary>
-    /// <param name="installerPath">Path to the installer file.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The imported package with extracted metadata.</returns>
-    Task<Package> ImportPackageAsync(string installerPath, CancellationToken cancellationToken = default);
+    void NotifyPackagesChanged();
 
     /// <summary>
     /// Event raised when packages are modified.

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CimianStudio.Views.Settings.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel Padding="32,24,32,32" Spacing="16">
+            <TextBlock Text="Settings"
+                       Style="{StaticResource TitleLargeTextBlockStyle}"
+                       Margin="0,0,0,8" />
+
+            <!-- Section cards are inserted here programmatically by code-behind -->
+            <StackPanel x:Name="SectionsPanel" Spacing="16" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

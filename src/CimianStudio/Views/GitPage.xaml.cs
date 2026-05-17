@@ -3,6 +3,9 @@ namespace CimianStudio.Views;
 using System.Globalization;
 using CimianStudio.Core.Models.Git;
 using CimianStudio.Core.Services;
+using CimianStudio.Settings;
+using CimianStudio.Shared.Settings;
+using Microsoft.UI;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -24,6 +27,8 @@ public sealed partial class GitPage : Page
     private readonly IGitService _gitService;
     private readonly IPackageService _packageService;
     private readonly IManifestService _manifestService;
+    private readonly IGitHooksService _gitHooksService;
+    private readonly ISettingsService _settingsService;
 
     private GitRepositoryInfo? _info;
     private List<ChangeRow> _rows = [];
@@ -42,16 +47,22 @@ public sealed partial class GitPage : Page
         IRepositoryService repositoryService,
         IGitService gitService,
         IPackageService packageService,
-        IManifestService manifestService)
+        IManifestService manifestService,
+        IGitHooksService gitHooksService,
+        ISettingsService settingsService)
     {
         ArgumentNullException.ThrowIfNull(repositoryService);
         ArgumentNullException.ThrowIfNull(gitService);
         ArgumentNullException.ThrowIfNull(packageService);
         ArgumentNullException.ThrowIfNull(manifestService);
+        ArgumentNullException.ThrowIfNull(gitHooksService);
+        ArgumentNullException.ThrowIfNull(settingsService);
         _repositoryService = repositoryService;
         _gitService = gitService;
         _packageService = packageService;
         _manifestService = manifestService;
+        _gitHooksService = gitHooksService;
+        _settingsService = settingsService;
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -559,19 +570,29 @@ public sealed partial class GitPage : Page
     {
         await RefreshAsync().ConfigureAwait(true);
         _historyLoaded = false;
+        _hooksLoaded = false;
         if (BodyPivot.SelectedIndex == 1)
         {
             await LoadHistoryAsync().ConfigureAwait(true);
         }
+        else if (BodyPivot.SelectedIndex == 2)
+        {
+            await LoadHooksAsync().ConfigureAwait(true);
+        }
     }
 
     private bool _historyLoaded;
+    private bool _hooksLoaded;
 
     private async void OnPivotSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (BodyPivot.SelectedIndex == 1 && !_historyLoaded)
         {
             await LoadHistoryAsync().ConfigureAwait(true);
+        }
+        else if (BodyPivot.SelectedIndex == 2 && !_hooksLoaded)
+        {
+            await LoadHooksAsync().ConfigureAwait(true);
         }
     }
 
@@ -589,7 +610,8 @@ public sealed partial class GitPage : Page
         try
         {
             var commits = await _gitService.GetHistoryAsync(_info, 200).ConfigureAwait(true);
-            var rows = commits.Select(c => new HistoryRow(c)).ToList();
+            var laneRows = LaneLayout.Compute(commits);
+            var rows = commits.Zip(laneRows, (c, lr) => new HistoryRow(c, lr)).ToList();
             HistoryList.ItemsSource = rows;
             HistoryEmpty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             _historyLoaded = true;
@@ -599,6 +621,223 @@ public sealed partial class GitPage : Page
             HistoryLoading.IsActive = false;
         }
     }
+
+    // ── Hooks pivot ───────────────────────────────────────────────────────────
+
+    private async Task LoadHooksAsync()
+    {
+        HooksList.ItemsSource = null;
+        HookEditorToolbar.Visibility = Visibility.Collapsed;
+        HookContentEdit.Visibility = Visibility.Collapsed;
+        HookContentPlaceholder.Text = "Select a hook to view its content.";
+        HookContentPlaceholder.Visibility = Visibility.Visible;
+
+        if (_info is null)
+        {
+            HooksEmpty.Visibility = Visibility.Visible;
+            return;
+        }
+
+        HooksEmpty.Visibility = Visibility.Collapsed;
+        HooksLoading.IsActive = true;
+        try
+        {
+            var hooksSettings = _settingsService.GetSection<HooksSettings>(HooksSectionProvider.Id);
+            var hooksInfo = await _gitHooksService
+                .DiscoverHooksDirAsync(_info.GitRoot, hooksSettings.OverridePath)
+                .ConfigureAwait(true);
+
+            HooksDirSourceLabel.Text = hooksInfo.SourceLabel;
+            HooksDirCaption.Text = Path.GetRelativePath(_info.GitRoot, hooksInfo.AbsolutePath);
+
+            var hooks = await _gitHooksService.GetHooksAsync(hooksInfo.AbsolutePath).ConfigureAwait(true);
+            HooksList.ItemsSource = hooks.Select(h => new HookRow(h, hooksInfo.AbsolutePath)).ToList();
+            _hooksLoaded = true;
+        }
+        finally
+        {
+            HooksLoading.IsActive = false;
+        }
+    }
+
+    private bool _suppressHookToggle;
+    private string? _hookOriginalContent;
+
+    private void OnHookSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListView lv || lv.SelectedItem is not HookRow row)
+        {
+            HookEditorToolbar.Visibility = Visibility.Collapsed;
+            HookContentEdit.Visibility = Visibility.Collapsed;
+            HookContentPlaceholder.Text = "Select a hook to view its content.";
+            HookContentPlaceholder.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var isSample = row.Hook.State == GitHookState.SampleOnly;
+        var isInactive = row.Hook.State == GitHookState.Inactive;
+        var definition = GitHookCatalog.Find(row.Name);
+
+        HookEditorTitle.Text = row.Name;
+        UpdateHookStateChip(row.Hook.State);
+        UpdateHookKindChip(definition?.Kind ?? GitHookKind.Unknown);
+        HookDescriptionText.Text = definition?.Description ?? string.Empty;
+        UpdateHookHint(row.Hook.State);
+
+        _suppressHookToggle = true;
+        HookActiveSwitch.IsOn = row.Hook.State == GitHookState.Active;
+        HookActiveSwitch.IsEnabled = !isSample;
+        _suppressHookToggle = false;
+
+        _hookOriginalContent = row.Hook.Content ?? string.Empty;
+        HookSaveButton.IsEnabled = false;
+        HookContentEdit.IsReadOnly = isSample;
+
+        var content = row.Hook.Content ?? string.Empty;
+        HookContentEdit.Text = content;
+        HookContentPlaceholder.Visibility = Visibility.Collapsed;
+        HookEditorToolbar.Visibility = Visibility.Visible;
+        HookContentEdit.Visibility = Visibility.Visible;
+
+        if (isInactive && string.IsNullOrEmpty(content))
+        {
+            HookContentEdit.PlaceholderText = "Hook not installed. Start typing to create it.";
+        }
+        else
+        {
+            HookContentEdit.PlaceholderText = string.Empty;
+        }
+    }
+
+    private void UpdateHookStateChip(GitHookState state)
+    {
+        var (label, color) = state switch
+        {
+            GitHookState.Active => ("Active", Color.FromArgb(0xFF, 0x4E, 0xC9, 0x70)),
+            GitHookState.Disabled => ("Disabled", Color.FromArgb(0xFF, 0xFF, 0xB8, 0x40)),
+            GitHookState.SampleOnly => ("Sample", Color.FromArgb(0xFF, 0x77, 0x9D, 0xFF)),
+            _ => ("Inactive", Color.FromArgb(0xFF, 0x8A, 0x8A, 0x8A)),
+        };
+        HookStateChipText.Text = label;
+        HookStateChip.Background = new SolidColorBrush(color);
+    }
+
+    private void UpdateHookKindChip(GitHookKind kind)
+    {
+        var (label, color) = kind switch
+        {
+            GitHookKind.ClientSide => ("Client-side", Color.FromArgb(0xFF, 0x00, 0x78, 0xD4)),
+            GitHookKind.ServerSide => ("Server-side", Color.FromArgb(0xFF, 0x88, 0x3E, 0xB7)),
+            _ => ("", Color.FromArgb(0x00, 0, 0, 0)),
+        };
+        HookKindChipText.Text = label;
+        HookKindChip.Background = new SolidColorBrush(color);
+        HookKindChip.Visibility = string.IsNullOrEmpty(label) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void UpdateHookHint(GitHookState state)
+    {
+        var hint = state switch
+        {
+            GitHookState.Inactive => "This hook isn't set up. Type a script and Save to create the file, then toggle Active.",
+            GitHookState.Disabled => "This hook exists but is disabled (renamed to .disabled). Toggle Active to re-enable.",
+            GitHookState.SampleOnly => "Git installed this as a read-only sample. The toggle is disabled until you replace it.",
+            _ => string.Empty,
+        };
+        HookHintText.Text = hint;
+        HookHintText.Visibility = string.IsNullOrEmpty(hint) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnHookContentChanged(object sender, TextChangedEventArgs e)
+    {
+        if (HookContentEdit.IsReadOnly) return;
+        HookSaveButton.IsEnabled = HookContentEdit.Text != _hookOriginalContent;
+    }
+
+    private async void OnSaveHookClicked(object sender, RoutedEventArgs e)
+    {
+        if (HooksList.SelectedItem is not HookRow row) return;
+        try
+        {
+            await _gitHooksService.SaveHookAsync(row.Hook.AbsolutePath, HookContentEdit.Text).ConfigureAwait(true);
+            _hookOriginalContent = HookContentEdit.Text;
+            HookSaveButton.IsEnabled = false;
+            ShowSuccess($"Saved {row.Name}.");
+            _hooksLoaded = false;
+            await LoadHooksAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            ShowError("Save failed", ex.Message);
+        }
+    }
+
+    private async void OnHookActiveSwitchToggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressHookToggle) return;
+        if (HooksList.SelectedItem is not HookRow row) return;
+
+        var wantActive = HookActiveSwitch.IsOn;
+        try
+        {
+            await _gitHooksService.SetHookActiveAsync(row.Hook.AbsolutePath, wantActive).ConfigureAwait(true);
+            ShowSuccess(wantActive ? $"Activated {row.Name}." : $"Disabled {row.Name}.");
+            _hooksLoaded = false;
+            await LoadHooksAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _suppressHookToggle = true;
+            HookActiveSwitch.IsOn = !wantActive;
+            _suppressHookToggle = false;
+            ShowError("Toggle failed", ex.Message);
+        }
+    }
+
+    private sealed class HookRow(GitHook hook, string hooksDir)
+    {
+        private static readonly SolidColorBrush ActiveBrush = new(Color.FromArgb(0xFF, 0x4E, 0xC9, 0x70));
+        private static readonly SolidColorBrush DisabledBrush = new(Color.FromArgb(0xFF, 0xFF, 0xB8, 0x40));
+        private static readonly SolidColorBrush SampleBrush = new(Color.FromArgb(0xFF, 0x77, 0x9D, 0xFF));
+        private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
+        private static readonly SolidColorBrush InactiveStrokeBrush = new(Color.FromArgb(0xFF, 0x80, 0x80, 0x80));
+        private static readonly SolidColorBrush InactiveNameBrush = new(Color.FromArgb(0xFF, 0xA0, 0xA0, 0xA0));
+
+        public GitHook Hook { get; } = hook;
+        public string Name => Hook.Name;
+        public string HooksDir { get; } = hooksDir;
+
+        public string StateDisplay => Hook.State switch
+        {
+            GitHookState.SampleOnly => "Sample",
+            GitHookState.Disabled => "Disabled",
+            GitHookState.Inactive => "Inactive",
+            _ => "",
+        };
+
+        // Active rows convey state via the green dot alone — no badge text needed.
+        public Visibility StateBadgeVisibility =>
+            Hook.State == GitHookState.Active ? Visibility.Collapsed : Visibility.Visible;
+
+        public Brush DotFill => Hook.State switch
+        {
+            GitHookState.Active => ActiveBrush,
+            GitHookState.Disabled => DisabledBrush,
+            GitHookState.SampleOnly => SampleBrush,
+            _ => TransparentBrush,
+        };
+
+        public Brush DotStroke => Hook.State == GitHookState.Active
+            ? TransparentBrush
+            : InactiveStrokeBrush;
+
+        // Dim the name for inactive rows so the active set reads as the primary list.
+        public Brush NameForeground => Hook.State == GitHookState.Inactive
+            ? InactiveNameBrush
+            : (SolidColorBrush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+    }
+
+    // ── History pivot ──────────────────────────────────────────────────────────
 
     private async void OnHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -681,10 +920,15 @@ public sealed partial class GitPage : Page
         {
             HideProgress();
             _historyLoaded = false;
+            _hooksLoaded = false;
             await RefreshAsync().ConfigureAwait(true);
             if (BodyPivot.SelectedIndex == 1)
             {
                 await LoadHistoryAsync().ConfigureAwait(true);
+            }
+            else if (BodyPivot.SelectedIndex == 2)
+            {
+                await LoadHooksAsync().ConfigureAwait(true);
             }
         }
     }
@@ -722,31 +966,252 @@ public sealed partial class GitPage : Page
         }
     }
 
-    /// <summary>
-    /// Right-click → "Copy commit SHA". Uses the abbreviated 12-char SHA the
-    /// history row already carries (matches what the row text displays).
-    /// </summary>
     private void OnCopyShaClicked(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row)
-        {
-            return;
-        }
-
-        var data = new Windows.ApplicationModel.DataTransfer.DataPackage();
-        data.SetText(row.Sha);
-        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(data);
-        ShowSuccess($"Copied SHA {row.Sha}.");
+        if (sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+        SetClipboard(row.FullSha);
+        ShowSuccess($"Copied hash {row.Sha}.");
     }
 
-    // Wraps GitCommit to surface a friendly WhenDisplay for binding without a converter.
-    private sealed class HistoryRow(GitCommit commit)
+    private void OnCopySubjectClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+        SetClipboard(row.Subject);
+        ShowSuccess("Copied subject.");
+    }
+
+    private static void SetClipboard(string text)
+    {
+        var data = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        data.SetText(text);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(data);
+    }
+
+    private async void OnTagCommitClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+
+        var nameBox = new TextBox { PlaceholderText = "Tag name (e.g. v1.0.0)", Margin = new Thickness(0, 8, 0, 0) };
+        var annotationBox = new TextBox { PlaceholderText = "Annotation message (leave blank for lightweight tag)", Margin = new Thickness(0, 8, 0, 0) };
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(new TextBlock { Text = $"Tag commit {row.Sha}" });
+        panel.Children.Add(nameBox);
+        panel.Children.Add(annotationBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Create Tag",
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+            Content = panel,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var tagName = nameBox.Text.Trim();
+        if (string.IsNullOrEmpty(tagName)) return;
+
+        var annotation = string.IsNullOrWhiteSpace(annotationBox.Text) ? null : annotationBox.Text.Trim();
+        var result = await _gitService.TagCommitAsync(_info, row.FullSha, tagName, annotation).ConfigureAwait(true);
+        if (result.Success) { ShowSuccess($"Created tag {tagName}."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Tag failed", result.Output);
+    }
+
+    private async void OnCreateBranchAtClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+
+        var nameBox = new TextBox { PlaceholderText = "Branch name", Margin = new Thickness(0, 8, 0, 0) };
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(new TextBlock { Text = $"Create branch at {row.Sha}" });
+        panel.Children.Add(nameBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Create Branch",
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+            Content = panel,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var branchName = nameBox.Text.Trim();
+        if (string.IsNullOrEmpty(branchName)) return;
+
+        var result = await _gitService.CreateBranchAtAsync(_info, row.FullSha, branchName).ConfigureAwait(true);
+        if (result.Success) { ShowSuccess($"Created branch {branchName}."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Create branch failed", result.Output);
+    }
+
+    private async void OnCheckoutCommitClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+        var result = await _gitService.CheckoutCommitAsync(_info, row.FullSha).ConfigureAwait(true);
+        if (result.Success) { ShowSuccess($"Checked out {row.Sha} (detached HEAD)."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Checkout failed", result.Output);
+    }
+
+    private async void OnCherryPickClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+        var result = await _gitService.CherryPickAsync(_info, row.FullSha).ConfigureAwait(true);
+        if (result.Success) { ShowSuccess($"Cherry-picked {row.Sha}."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Cherry-pick failed", result.Output);
+    }
+
+    private async void OnRevertCommitClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+        var result = await _gitService.RevertCommitAsync(_info, row.FullSha).ConfigureAwait(true);
+        if (result.Success) { ShowSuccess($"Reverted {row.Sha}."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Revert failed", result.Output);
+    }
+
+    private async void OnMergeCommitClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+        var result = await _gitService.MergeCommitAsync(_info, row.FullSha).ConfigureAwait(true);
+        if (result.Success) { ShowSuccess($"Merged {row.Sha}."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Merge failed", result.Output);
+    }
+
+    private async void OnRebaseOntoClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+        var result = await _gitService.RebaseOntoAsync(_info, row.FullSha).ConfigureAwait(true);
+        if (result.Success) { ShowSuccess($"Rebased onto {row.Sha}."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Rebase failed", result.Output);
+    }
+
+    private async void OnResetToClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+
+        var softRadio  = new RadioButton { Content = "Soft  — keep changes staged", IsChecked = true };
+        var mixedRadio = new RadioButton { Content = "Mixed — keep changes unstaged" };
+        var hardRadio  = new RadioButton { Content = "Hard  — discard all changes", Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xE7, 0x6F, 0x6F)) };
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(new TextBlock { Text = $"Reset HEAD to {row.Sha}", TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(softRadio);
+        panel.Children.Add(mixedRadio);
+        panel.Children.Add(hardRadio);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Reset to Commit",
+            PrimaryButtonText = "Reset",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+            Content = panel,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var mode = hardRadio.IsChecked == true ? GitResetMode.Hard
+                 : mixedRadio.IsChecked == true ? GitResetMode.Mixed
+                 : GitResetMode.Soft;
+
+        var result = await _gitService.ResetToAsync(_info, row.FullSha, mode).ConfigureAwait(true);
+        if (result.Success) { ShowSuccess($"Reset to {row.Sha} ({mode})."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Reset failed", result.Output);
+    }
+
+    private async void OnEditCommitMessageClicked(object sender, RoutedEventArgs e)
+    {
+        if (_info is null || sender is not MenuFlyoutItem item || item.DataContext is not HistoryRow row) return;
+
+        // Fetch the full message body (not just the subject line).
+        var currentMessage = await _gitService.GetCommitMessageAsync(_info, row.FullSha).ConfigureAwait(true);
+
+        // Monospaced so the 50/72 convention is visually enforced (lines that exceed
+        // the width visibly overflow rather than silently soft-wrap mid-word).
+        var msgBox = new TextBox
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, Courier New"),
+            FontSize = 13,
+            MinHeight = 280,
+            MaxHeight = 420,
+            MinWidth = 640,
+            Text = currentMessage,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        ScrollViewer.SetHorizontalScrollBarVisibility(msgBox, ScrollBarVisibility.Auto);
+        ScrollViewer.SetVerticalScrollBarVisibility(msgBox, ScrollBarVisibility.Auto);
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(new TextBlock { Text = $"Rewrite message for commit {row.Sha}" });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Convention: subject ≤ 50 chars, blank line, body wrapped at 72.",
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+            Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+        });
+        panel.Children.Add(msgBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Edit Commit Message",
+            Content = panel,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+        // ContentDialog has a fairly narrow default max width; widen it so 72-char
+        // body lines fit without horizontal scrolling.
+        dialog.Resources["ContentDialogMaxWidth"] = 800.0;
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var newMessage = msgBox.Text.Trim();
+        if (string.IsNullOrEmpty(newMessage)) return;
+
+        var opResult = await _gitService.EditCommitMessageAsync(_info, row.FullSha, newMessage).ConfigureAwait(true);
+        if (opResult.Success) { ShowSuccess($"Updated message for {row.Sha}."); await RefreshHistoryAfterOpAsync().ConfigureAwait(true); }
+        else ShowError("Edit commit message failed", opResult.Output);
+    }
+
+    private async Task RefreshHistoryAfterOpAsync()
+    {
+        await RefreshAsync().ConfigureAwait(true);
+        _historyLoaded = false;
+        await LoadHistoryAsync().ConfigureAwait(true);
+        if (App.MainWindowInstance is { } window)
+            await window.RefreshGitIndicatorAsync(_repositoryService.CurrentRepository).ConfigureAwait(true);
+    }
+
+    private sealed class HistoryRow(GitCommit commit, LaneGraphRow laneRow)
     {
         public string Sha => commit.Sha;
+        public string FullSha => commit.FullSha.Length > 0 ? commit.FullSha : commit.Sha;
         public string Subject => commit.Subject;
         public string AuthorName => commit.AuthorName;
-        public string AuthorEmail => commit.AuthorEmail;
         public string WhenDisplay => commit.When.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        public LaneGraphRow LaneRow => laneRow;
+        public IReadOnlyList<RefBadgeViewModel> Refs { get; } = commit.Refs
+            .Select(r => new RefBadgeViewModel(r)).ToList();
+    }
+
+    private sealed class RefBadgeViewModel(CommitRef @ref)
+    {
+        public string Label => @ref.Label;
+
+        public SolidColorBrush Background => new(@ref.Kind switch
+        {
+            CommitRefKind.Head => Color.FromArgb(0xFF, 0x4E, 0xC9, 0x70),
+            CommitRefKind.LocalBranch => Color.FromArgb(0xFF, 0x77, 0x9D, 0xFF),
+            CommitRefKind.RemoteBranch => Color.FromArgb(0xFF, 0xC0, 0x82, 0xFF),
+            CommitRefKind.Tag => Color.FromArgb(0xFF, 0xFF, 0xB8, 0x40),
+            _ => Colors.Gray,
+        });
+
+        // Border thickness is constant in XAML; only the color varies. This keeps
+        // every badge exactly the same physical height regardless of HEAD-target.
+        public SolidColorBrush BorderBrush => new(@ref.IsHeadTarget ? Colors.White : Colors.Transparent);
     }
 
     private void OnChangeSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1041,9 +1506,14 @@ public sealed partial class GitPage : Page
     {
         await RefreshAsync().ConfigureAwait(true);
         _historyLoaded = false;
+        _hooksLoaded = false;
         if (BodyPivot.SelectedIndex == 1)
         {
             await LoadHistoryAsync().ConfigureAwait(true);
+        }
+        else if (BodyPivot.SelectedIndex == 2)
+        {
+            await LoadHooksAsync().ConfigureAwait(true);
         }
         if (App.MainWindowInstance is { } window)
         {

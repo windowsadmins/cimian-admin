@@ -182,6 +182,14 @@
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>
 
+            <muxc:NavigationView.FooterMenuItems>
+                <muxc:NavigationViewItem x:Name="NavSettings" Tag="settings" Content="Settings">
+                    <muxc:NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Setting" />
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+            </muxc:NavigationView.FooterMenuItems>
+
             <Frame x:Name="ContentFrame" />
         </muxc:NavigationView>
     </Grid>

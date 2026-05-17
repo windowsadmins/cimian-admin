@@ -170,6 +170,192 @@ public sealed class GitService : IGitService
         }, cancellationToken);
     }
 
+    public Task<GitSimpleResult> TagCommitAsync(GitRepositoryInfo info, string sha, string tagName, string? annotation = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var args = string.IsNullOrWhiteSpace(annotation)
+                ? (IEnumerable<string>)["tag", tagName, sha]
+                : ["tag", "-a", tagName, sha, "-m", annotation];
+            var (code, output) = RunGit(info.GitRoot, args);
+            return new GitSimpleResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitSimpleResult> CreateBranchAtAsync(GitRepositoryInfo info, string sha, string branchName, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var (code, output) = RunGit(info.GitRoot, ["branch", branchName, sha]);
+            return new GitSimpleResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitSimpleResult> CheckoutCommitAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var (code, output) = RunGit(info.GitRoot, ["checkout", sha]);
+            return new GitSimpleResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitSimpleResult> CherryPickAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var (code, output) = RunGit(info.GitRoot, ["cherry-pick", sha]);
+            return new GitSimpleResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitSimpleResult> RevertCommitAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var (code, output) = RunGit(info.GitRoot, ["revert", "--no-edit", sha]);
+            return new GitSimpleResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitSimpleResult> MergeCommitAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var (code, output) = RunGit(info.GitRoot, ["merge", sha]);
+            return new GitSimpleResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitSimpleResult> RebaseOntoAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var (code, output) = RunGit(info.GitRoot, ["rebase", sha]);
+            return new GitSimpleResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitSimpleResult> ResetToAsync(GitRepositoryInfo info, string sha, GitResetMode mode, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var modeFlag = mode switch
+            {
+                GitResetMode.Soft => "--soft",
+                GitResetMode.Hard => "--hard",
+                _ => "--mixed",
+            };
+            var (code, output) = RunGit(info.GitRoot, ["reset", modeFlag, sha]);
+            return new GitSimpleResult(code == 0, output);
+        }, cancellationToken);
+    }
+
+    public Task<GitSimpleResult> EditCommitMessageAsync(GitRepositoryInfo info, string sha, string newMessage, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        ArgumentNullException.ThrowIfNull(newMessage);
+        return Task.Run(() =>
+        {
+            // Is this the HEAD commit? If so, amend is simpler and safer.
+            var (headCode, headOutput) = RunGit(info.GitRoot, ["rev-parse", "HEAD"]);
+            if (headCode == 0)
+            {
+                var headSha = headOutput.Trim();
+                if (headSha.StartsWith(sha, StringComparison.OrdinalIgnoreCase) ||
+                    sha.StartsWith(headSha, StringComparison.OrdinalIgnoreCase))
+                {
+                    var (code, output) = RunGit(info.GitRoot, ["commit", "--amend", "-m", newMessage]);
+                    return new GitSimpleResult(code == 0, output);
+                }
+            }
+
+            // Older commit: drive rebase -i non-interactively via temp PowerShell scripts.
+            var tmpDir = Path.Combine(Path.GetTempPath(), $"cimian_reword_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(tmpDir);
+            try
+            {
+                var msgFile = Path.Combine(tmpDir, "message.txt");
+                var seqScript = Path.Combine(tmpDir, "seq_editor.ps1");
+                var msgScript = Path.Combine(tmpDir, "msg_editor.ps1");
+
+                // LF-normalized message so git doesn't warn about CR.
+                var normalized = newMessage.Replace("\r\n", "\n", StringComparison.Ordinal)
+                                           .Replace('\r', '\n');
+                File.WriteAllText(msgFile, normalized, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                // Sequence editor: for lines whose abbreviated SHA is a prefix of our full SHA,
+                // flip "pick" → "reword" so git will stop and let us supply the new message.
+                var escapedMsgForRegex = msgFile.Replace("'", "''", StringComparison.Ordinal);
+                File.WriteAllText(seqScript,
+                    $"$fullSha='{sha}'; $f=$args[0]; " +
+                    "(Get-Content $f) | ForEach-Object { " +
+                    "if ($_ -match '^pick ([0-9a-f]+)' -and $fullSha.StartsWith($Matches[1])) { $_ -replace '^pick','reword' } else { $_ } " +
+                    "} | Set-Content $f\n",
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                // Message editor: replace the commit-msg file git opens with our prepared message.
+                File.WriteAllText(msgScript,
+                    $"Set-Content -Encoding UTF8 $args[0] (Get-Content -Raw '{escapedMsgForRegex}')\n",
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                // Resolve the commit's first parent (fails if this is the root commit).
+                var (pCode, pOut) = RunGit(info.GitRoot, ["rev-parse", $"{sha}^"]);
+                if (pCode != 0)
+                    return new GitSimpleResult(false, $"Cannot find parent of {sha[..7]}: {pOut}");
+                var parentSha = pOut.Trim();
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    WorkingDirectory = info.GitRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                psi.Environment["GIT_SEQUENCE_EDITOR"] = $"pwsh -NonInteractive -File \"{seqScript}\"";
+                psi.Environment["GIT_EDITOR"] = $"pwsh -NonInteractive -File \"{msgScript}\"";
+                psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+                psi.ArgumentList.Add("rebase");
+                psi.ArgumentList.Add("-i");
+                psi.ArgumentList.Add(parentSha);
+
+                var combined = new System.Text.StringBuilder();
+                using var proc = new Process { StartInfo = psi };
+                proc.OutputDataReceived += (_, e) => { if (e.Data is not null) combined.AppendLine(e.Data); };
+                proc.ErrorDataReceived += (_, e) => { if (e.Data is not null) combined.AppendLine(e.Data); };
+                if (!proc.Start()) return new GitSimpleResult(false, "git rebase failed to start");
+                proc.BeginOutputReadLine();
+                proc.BeginErrorReadLine();
+                proc.WaitForExit();
+                return new GitSimpleResult(proc.ExitCode == 0, combined.ToString().TrimEnd());
+            }
+            finally
+            {
+                try { Directory.Delete(tmpDir, recursive: true); } catch { /* best-effort cleanup */ }
+            }
+        }, cancellationToken);
+    }
+
+    public Task<string> GetCommitMessageAsync(GitRepositoryInfo info, string sha, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return Task.Run(() =>
+        {
+            var (code, output) = RunGit(info.GitRoot, ["log", "--format=%B", "-1", sha]);
+            return code == 0 ? output.TrimEnd() : string.Empty;
+        }, cancellationToken);
+    }
+
     private static GitRepositoryInfo? DiscoverCore(string deploymentRoot)
     {
         if (string.IsNullOrWhiteSpace(deploymentRoot) || !Directory.Exists(deploymentRoot))
@@ -525,30 +711,108 @@ public sealed class GitService : IGitService
         }
     }
 
+    // Field separator (ASCII Unit Separator) and record separator used in git log format.
+    private const char FieldSep = '\x1f';
+    private const char RecordSep = '\x1e';
+
     private static List<GitCommit> GetHistoryCore(GitRepositoryInfo info, int limit)
     {
-        if (limit <= 0)
-        {
-            return [];
-        }
+        if (limit <= 0) return [];
 
-        try
+        // %H=full sha, %an=author name, %ae=author email, %aI=ISO8601 author date,
+        // %P=parent shas (space-separated), %D=ref names, %s=subject
+        var format = $"%H{FieldSep}%an{FieldSep}%ae{FieldSep}%aI{FieldSep}%P{FieldSep}%D{FieldSep}%s{RecordSep}";
+        var (code, output) = RunGit(info.GitRoot,
+            ["log", "--all", "--topo-order", "--decorate=full",
+             $"--max-count={limit}", $"--pretty=format:{format}"]);
+
+        if (code != 0 || string.IsNullOrEmpty(output)) return [];
+
+        var result = new List<GitCommit>();
+        foreach (var record in output.Split(RecordSep, StringSplitOptions.RemoveEmptyEntries))
         {
-            using var repo = new Repository(info.GitRoot);
-            return [.. repo.Commits
-                .QueryBy(new CommitFilter { SortBy = CommitSortStrategies.Time })
-                .Take(limit)
-                .Select(c => new GitCommit(
-                    Sha: c.Sha[..12],
-                    Subject: (c.MessageShort ?? c.Message ?? string.Empty).TrimEnd('\r', '\n'),
-                    AuthorName: c.Author?.Name ?? string.Empty,
-                    AuthorEmail: c.Author?.Email ?? string.Empty,
-                    When: c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue))];
+            var line = record.Trim('\n', '\r', ' ');
+            if (string.IsNullOrEmpty(line)) continue;
+
+            var fields = line.Split(FieldSep);
+            if (fields.Length < 7) continue;
+
+            var fullSha = fields[0].Trim();
+            if (fullSha.Length < 12) continue;
+
+            var authorName = fields[1];
+            var authorEmail = fields[2];
+            DateTimeOffset when = DateTimeOffset.TryParse(
+                fields[3], System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var dt) ? dt : DateTimeOffset.MinValue;
+
+            var parentShas = fields[4].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var refsStr = fields[5];
+            var subject = fields[6];
+
+            result.Add(new GitCommit(
+                Sha: fullSha[..12],
+                Subject: subject,
+                AuthorName: authorName,
+                AuthorEmail: authorEmail,
+                When: when)
+            {
+                FullSha = fullSha,
+                ParentShas = parentShas,
+                Refs = ParseDecoratedRefs(refsStr),
+            });
         }
-        catch (LibGit2SharpException)
+        return result;
+    }
+
+    private static List<CommitRef> ParseDecoratedRefs(string refsStr)
+    {
+        if (string.IsNullOrWhiteSpace(refsStr)) return [];
+        var result = new List<CommitRef>();
+        foreach (var part in refsStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            return [];
+            // "HEAD -> refs/heads/main"
+            if (part.StartsWith("HEAD -> ", StringComparison.Ordinal))
+            {
+                result.Add(new CommitRef("HEAD", CommitRefKind.Head, IsHeadTarget: false));
+                var target = part["HEAD -> ".Length..];
+                result.Add(new CommitRef(FriendlyRef(target), CommitRefKind.LocalBranch, IsHeadTarget: true));
+                continue;
+            }
+            // Detached HEAD
+            if (part == "HEAD")
+            {
+                result.Add(new CommitRef("HEAD", CommitRefKind.Head, IsHeadTarget: false));
+                continue;
+            }
+            // "tag: refs/tags/v1.0"
+            if (part.StartsWith("tag: ", StringComparison.Ordinal))
+            {
+                result.Add(new CommitRef(FriendlyRef(part["tag: ".Length..]), CommitRefKind.Tag, IsHeadTarget: false));
+                continue;
+            }
+            // "refs/remotes/origin/main"
+            if (part.StartsWith("refs/remotes/", StringComparison.Ordinal))
+            {
+                result.Add(new CommitRef(part["refs/remotes/".Length..], CommitRefKind.RemoteBranch, IsHeadTarget: false));
+                continue;
+            }
+            // "refs/heads/main"
+            if (part.StartsWith("refs/heads/", StringComparison.Ordinal))
+            {
+                result.Add(new CommitRef(part["refs/heads/".Length..], CommitRefKind.LocalBranch, IsHeadTarget: false));
+                continue;
+            }
         }
+        return result;
+    }
+
+    private static string FriendlyRef(string refName)
+    {
+        if (refName.StartsWith("refs/heads/", StringComparison.Ordinal))  return refName["refs/heads/".Length..];
+        if (refName.StartsWith("refs/remotes/", StringComparison.Ordinal)) return refName["refs/remotes/".Length..];
+        if (refName.StartsWith("refs/tags/", StringComparison.Ordinal))   return refName["refs/tags/".Length..];
+        return refName;
     }
 
     private static List<GitBranch> GetBranchesCore(GitRepositoryInfo info)
